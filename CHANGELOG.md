@@ -23,7 +23,8 @@ First stable release.
 ### Known limitations
 
 - No per-check lock: checks that write shared outputs need `dependsOn` or `concurrency: 1` (see the configuration reference).
-- On Linux and macOS, a process that deliberately leaves the check's process group (for example a daemon started with `setsid`) is not tracked unless it keeps the check's output open, in which case the check is reported as `error`.
+- A process that deliberately detaches from the check (on Linux and macOS: leaves the process group, for example via `setsid`; on Windows: breaks away from the job with an exited intermediate parent) is not tracked unless it keeps the check's output open, in which case the check is reported as `error`.
+- On Windows, confirming cleanup queries the process table with PowerShell after each check, which costs roughly 0.5–3 s per check.
 - Not yet published to the npm registry.
 
 [1.0.0]: https://github.com/alexportelli12/verifika/releases/tag/v1.0.0

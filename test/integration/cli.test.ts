@@ -1,9 +1,12 @@
+import { spawnSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync, utimesSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import type { RunResult } from "../../src/types.ts";
 import {
+  CLI,
+  cleanEnv,
   commitAll,
   config,
   gitRepo,
@@ -388,6 +391,23 @@ describe("verifika run", () => {
     expect(result.code).toBe(0);
     expect(survived).toBe(false);
   });
+
+  it.skipIf(process.platform !== "linux")(
+    "treats killed leftovers as gone under a PID 1 that never reaps zombies",
+    async (context) => {
+      // Like `docker run` without --init: Verifika is PID 1 of a new namespace.
+      const probe = spawnSync("unshare", ["-Urpf", "--mount-proc", "true"]);
+      if (probe.status !== 0) context.skip("unprivileged user namespaces are unavailable");
+      const root = project({ bg: { command: "sleep 100 & echo started" } });
+      const result = spawnSync(
+        "unshare",
+        ["-Urpf", "--mount-proc", process.execPath, CLI, "--all"],
+        { cwd: root, encoding: "utf8", env: cleanEnv() },
+      );
+      expect(result.stdout).toMatch(/^PASS 1\/1 \(0\.\ds\)/);
+      expect(result.status).toBe(0);
+    },
+  );
 
   it("never passes a check whose leftover processes escape cleanup", async () => {
     const root = project({ escape: { command: "node check.mjs escape escape.txt" } });

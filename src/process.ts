@@ -1,5 +1,5 @@
 import { spawn, type ChildProcess } from "node:child_process";
-import { createWriteStream } from "node:fs";
+import { createWriteStream, readdirSync, readFileSync } from "node:fs";
 import { StringDecoder } from "node:string_decoder";
 import { OutputCapture } from "./preview.ts";
 
@@ -184,7 +184,7 @@ async function reapLeftovers(child: ChildProcess, spawnedAt: number): Promise<st
   if (child.pid !== undefined) {
     if (isWindows) {
       try {
-        await killWindowsDescendants(child.pid, spawnedAt);
+        failure = await killWindowsDescendants(child.pid, spawnedAt);
       } catch (error) {
         failure = `could not inspect the process tree: ${(error as Error).message}`;
       }
@@ -229,13 +229,36 @@ async function stopGroup(pid: number): Promise<boolean> {
   return waitUntil(() => !groupExists(pid), KILL_WAIT_MS);
 }
 
-function groupExists(pid: number): boolean {
+function groupExists(pgid: number): boolean {
   try {
-    process.kill(-pid, 0);
-    return true;
+    process.kill(-pgid, 0);
   } catch (error) {
     return (error as NodeJS.ErrnoException).code === "EPERM";
   }
+  // kill() also succeeds for zombies. Under a PID 1 that never reaps (Docker without
+  // --init, CI container jobs) a killed leftover stays a zombie forever; it is dead,
+  // so on Linux the group only counts as alive if a member is not a zombie.
+  return process.platform === "linux" ? hasLiveMember(pgid) : true;
+}
+
+function hasLiveMember(pgid: number): boolean {
+  let pids: string[];
+  try {
+    pids = readdirSync("/proc").filter((name) => /^\d+$/.test(name));
+  } catch {
+    return true;
+  }
+  for (const pid of pids) {
+    try {
+      const stat = readFileSync(`/proc/${pid}/stat`, "utf8");
+      // Format: pid (comm) state ppid pgrp ...; comm may itself contain spaces or ")".
+      const [state, , pgrp] = stat.slice(stat.lastIndexOf(")") + 2).split(" ");
+      if (Number(pgrp) === pgid && state !== "Z") return true;
+    } catch {
+      // The process exited while scanning.
+    }
+  }
+  return false;
 }
 
 function signalGroup(pid: number, signal: NodeJS.Signals): void {
@@ -246,41 +269,63 @@ function signalGroup(pid: number, signal: NodeJS.Signals): void {
   }
 }
 
-interface ProcessEntry {
+export interface ProcessEntry {
   pid: number;
   parentPid: number;
   createdAt: number;
 }
 
 /**
- * Descendants of `root` that were created after `notBefore`. Windows does not
- * reparent orphans, so a leftover still names its exited parent; the creation
- * time guards against an unrelated process whose parent id was reused.
+ * Processes descending from the check's exited root process. Windows does not
+ * reparent orphans, so leftovers still name their exited parent, but process ids
+ * are reused. A process only counts as a descendant if it was created after its
+ * parent, and a child of the root's id only if no current holder of that id
+ * (which must be a newer, unrelated process: the root has exited) predates it.
  */
-export function descendantsOf(table: ProcessEntry[], root: number, notBefore: number): number[] {
-  const found: number[] = [];
-  const queue = [root];
+export function descendantsOf(
+  table: ProcessEntry[],
+  root: number,
+  rootCreatedAt: number,
+): ProcessEntry[] {
+  const found: ProcessEntry[] = [];
+  const reusedRoot = table.find((entry) => entry.pid === root);
+  const queue: ProcessEntry[] = [{ pid: root, parentPid: -1, createdAt: rootCreatedAt }];
   while (queue.length > 0) {
-    const parent = queue.shift() as number;
+    const parent = queue.shift() as ProcessEntry;
+    const isRoot = parent.pid === root && parent.createdAt === rootCreatedAt;
     for (const entry of table) {
-      if (
-        entry.pid !== root &&
-        entry.parentPid === parent &&
-        entry.createdAt >= notBefore &&
-        !found.includes(entry.pid)
-      ) {
-        found.push(entry.pid);
-        queue.push(entry.pid);
-      }
+      if (entry.parentPid !== parent.pid || entry.createdAt < parent.createdAt) continue;
+      if (isRoot && reusedRoot && entry.createdAt >= reusedRoot.createdAt) continue;
+      if (entry.pid === root || found.some((known) => known.pid === entry.pid)) continue;
+      found.push(entry);
+      queue.push(entry);
     }
   }
   return found;
 }
 
-async function killWindowsDescendants(rootPid: number, spawnedAt: number): Promise<void> {
-  // Allow for clock granularity between Node and the process creation timestamp.
-  const victims = descendantsOf(await windowsProcessTable(), rootPid, spawnedAt - 2_000);
-  if (victims.length > 0) await taskkill(victims);
+/** Kills the check's leftover descendants and confirms they are gone. */
+async function killWindowsDescendants(
+  rootPid: number,
+  spawnedAt: number,
+): Promise<string | undefined> {
+  // A small allowance for the gap between Date.now() and the OS creation timestamp.
+  const victims = descendantsOf(await windowsProcessTable(), rootPid, spawnedAt - 100);
+  if (victims.length === 0) return undefined;
+  await taskkill(victims.map((victim) => victim.pid));
+  const deadline = Date.now() + KILL_WAIT_MS;
+  for (;;) {
+    const table = await windowsProcessTable();
+    // Same pid and creation time: the very process we tried to kill is still there.
+    const survivors = victims.filter((victim) =>
+      table.some((entry) => entry.pid === victim.pid && entry.createdAt === victim.createdAt),
+    );
+    if (survivors.length === 0) return undefined;
+    if (Date.now() >= deadline) {
+      return `processes ${survivors.map((victim) => victim.pid).join(", ")} survived taskkill`;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
 }
 
 const WINDOWS_PROCESS_QUERY =
@@ -318,7 +363,7 @@ function windowsProcessTable(): Promise<ProcessEntry[]> {
 function taskkill(pids: number[]): Promise<void> {
   return new Promise((resolve) => {
     const args = [...pids.flatMap((pid) => ["/PID", String(pid)]), "/T", "/F"];
-    const killer = spawn("taskkill", args, { stdio: "ignore", windowsHide: true });
+    const killer = spawn("taskkill", args, { stdio: "ignore", windowsHide: true, timeout: 30_000 });
     killer.once("error", () => resolve());
     killer.once("close", () => resolve());
   });

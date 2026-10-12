@@ -182,16 +182,25 @@ function completedResult(
     preview: outcome.preview,
   };
   // Leftover processes may still be changing files or holding ports, so the check's own
-  // result cannot be trusted as a pass, whatever its exit code.
-  if (outcome.cleanupError !== undefined && outcome.kind !== "aborted") {
+  // result cannot be trusted as a pass, whatever its exit code. Timeouts and
+  // cancellations keep their status (they already failed) and carry the detail.
+  if (outcome.cleanupError !== undefined && outcome.kind === "exited") {
     return {
       ...common,
       status: "error",
       reason: "process tree not cleaned up",
-      exitCode: outcome.kind === "exited" ? outcome.exitCode : null,
+      exitCode: outcome.exitCode,
       error: outcome.cleanupError,
     };
   }
+  const withCleanup = (result: CheckResult): CheckResult =>
+    outcome.cleanupError === undefined
+      ? result
+      : {
+          ...result,
+          reason: `${result.reason}; process tree not cleaned up`,
+          error: outcome.cleanupError,
+        };
   switch (outcome.kind) {
     case "exited":
       if (outcome.exitCode === 0)
@@ -204,22 +213,24 @@ function completedResult(
         signal: outcome.signal,
       };
     case "timed_out":
-      return {
+      return withCleanup({
         ...common,
         status: "timed_out",
         reason: `timed out after ${formatSeconds(check.timeoutMs)}`,
-      };
+      });
     case "spawn_error":
       return { ...common, status: "error", reason: "could not start", error: outcome.error };
     case "aborted": {
       const stop = outcome.reason as StopReason | undefined;
-      return stop?.kind === "fail-fast"
-        ? {
-            ...common,
-            status: "cancelled",
-            reason: `cancelled after ${stop.failed} failed (fail-fast)`,
-          }
-        : { ...common, status: "interrupted", reason: "interrupted" };
+      return withCleanup(
+        stop?.kind === "fail-fast"
+          ? {
+              ...common,
+              status: "cancelled",
+              reason: `cancelled after ${stop.failed} failed (fail-fast)`,
+            }
+          : { ...common, status: "interrupted", reason: "interrupted" },
+      );
     }
   }
 }

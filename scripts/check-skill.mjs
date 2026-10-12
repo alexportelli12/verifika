@@ -70,7 +70,7 @@ try {
     const result = spawnSync(process.execPath, [cli, ...args], {
       cwd: fixture,
       encoding: "utf8",
-      env: { ...process.env, VERIFIKA_MODE: "", CI: "" },
+      env: { ...process.env, VERIFIKA_MODE: "" },
       timeout: 60_000,
     });
     if (
