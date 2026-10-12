@@ -4,7 +4,7 @@ import {
   duration,
   isFailureStatus,
   logsHint,
-  MAX_PREVIEWED_FAILURES,
+  previewDecider,
   problems,
   selectionLabel,
   type Output,
@@ -101,20 +101,18 @@ export function renderSummary(result: RunResult, style: Style): string {
   const { summary } = result;
   const lines: string[] = [];
   const failing = problems(result);
-  let previewed = 0;
+  const decide = previewDecider(result);
   if (failing.length > 0) lines.push("");
   for (const check of failing) {
     if (!isFailureStatus(check.status)) {
       lines.push(`${symbol(check.status, style)} ${check.name}: ${describeProblem(check)}`);
       continue;
     }
+    const preview = decide(check);
     lines.push(
-      `${symbol(check.status, style)} ${style.bold(check.name)}: ${describeProblem(check)}`,
+      `${symbol(check.status, style)} ${style.bold(check.name)}: ${describeProblem(check)}${preview.note && style.dim(preview.note)}`,
     );
-    if (check.preview.length > 0 && previewed < MAX_PREVIEWED_FAILURES) {
-      previewed++;
-      lines.push(...check.preview.map((line) => style.dim(`    ${line}`)));
-    }
+    if (preview.show) lines.push(...check.preview.map((line) => style.dim(`    ${line}`)));
   }
   const time = duration(result.durationMs);
   if (result.status === "passed") {

@@ -61,10 +61,10 @@ typecheck: exit 2
   src/cart.ts(14,7): error TS2322: Type 'string' is not assignable to type 'number'.
 e2e: dependency build did not pass
 build: timed out after 5m00s
-Run: verifika logs --failed
+Run: vfk logs --failed
 ```
 
-The first line is `PASS`, `FAIL` or `INTERRUPTED`, then `passed/selected`, total duration and what was selected. Each selected check that did not pass gets one line. Up to three failed checks get a preview of at most `--preview` lines, chosen in this order: lines that clearly state a failure (assertion errors, compiler errors such as `error TS2322`, `FAIL`/`FAILED` markers) plus the line after each; otherwise lines that mention errors (with the file heading above them, for tools like ESLint); otherwise the last lines of output. Progress output that redraws itself (for example Karma's `Executed 12 of 756`) is collapsed to its final state, and JSON log lines are not treated as failures. Package-manager boilerplate (`npm error ...`) is left out. Previews are ANSI-stripped and each line is capped at 200 characters.
+The first line is `PASS`, `FAIL` or `INTERRUPTED`, then `passed/selected`, total duration and what was selected. Each selected check that did not pass gets one line. Up to three failed checks get a preview of at most `--preview` lines, chosen in this order: lines that clearly state a failure (assertion errors, compiler errors such as `error TS2322`, `FAIL`/`FAILED` markers) plus the line after each; otherwise lines that mention errors (with the file heading above them, for tools like ESLint); otherwise the last lines of output. Progress output that redraws itself (for example Karma's `Executed 12 of 756`) is collapsed to its final state, and JSON log lines are not treated as failures. ESLint errors are kept with the file heading above them, and its `✖ N problems` summary. Package-manager boilerplate (`npm error ...`, and script banners such as `> app@1.0.0 lint` / `> eslint .` or yarn's `$ eslint .`) is left out. Previews are ANSI-stripped and each line is capped at 200 characters. A failed check beyond the first three gets `(preview omitted: vfk logs <check>)` on its line instead of a preview.
 
 When nothing is selected:
 

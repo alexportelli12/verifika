@@ -59,7 +59,22 @@ On failure, one line per problem, a short preview, and the command for full logs
 FAIL 3/4 (3.2s) full run (--all)
 typecheck: exit 2
   src/cart.ts(14,7): error TS2322: Type 'string' is not assignable to type 'number'.
-Run: verifika logs typecheck
+Run: vfk logs typecheck
+```
+
+Previews are shown for at most three failed checks. Any further failed check says where its output is instead:
+
+```text
+FAIL 1/5 (9.8s) full run (--all)
+format: exit 1
+  [warn] src/cart.ts
+lint: exit 1
+  /repo/src/cart.ts
+    12:9  error  'total' is assigned a value but never used  no-unused-vars
+typecheck: exit 2
+  src/cart.ts(14,7): error TS2322: Type 'string' is not assignable to type 'number'.
+test: exit 1 (preview omitted: vfk logs test)
+Run: vfk logs --failed
 ```
 
 | Exit code | Meaning                                                                |

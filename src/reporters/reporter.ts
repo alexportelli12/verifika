@@ -59,8 +59,34 @@ export function describeProblem(check: CheckResult): string {
 export function logsHint(result: RunResult): string | null {
   const withLogs = problems(result).filter((check) => isFailureStatus(check.status) && check.log);
   if (withLogs.length === 0) return null;
-  const command = withLogs.length === 1 ? `vfk logs ${withLogs[0]?.name}` : "vfk logs --failed";
+  return logsCommand(result, withLogs.length === 1 ? (withLogs[0]?.name ?? "") : "--failed");
+}
+
+/** `vfk logs <target>`, naming the run when a later run has become the latest. */
+function logsCommand(result: RunResult, target: string): string {
+  const command = `vfk logs ${target}`;
   return result.latest ? command : `${command} --run ${result.runId}`;
+}
+
+/**
+ * Decides which failed checks get their preview printed: at most
+ * MAX_PREVIEWED_FAILURES, in config order. The rest get a note pointing at their
+ * log, so a hidden preview never looks like one that found nothing.
+ */
+export function previewDecider(
+  result: RunResult,
+): (check: CheckResult) => { show: boolean; note: string } {
+  let previewed = 0;
+  return (check) => {
+    if (!isFailureStatus(check.status) || check.preview.length === 0) {
+      return { show: false, note: "" };
+    }
+    if (previewed < MAX_PREVIEWED_FAILURES) {
+      previewed++;
+      return { show: true, note: "" };
+    }
+    return { show: false, note: ` (preview omitted: ${logsCommand(result, check.name)})` };
+  };
 }
 
 export function verdict(result: RunResult): string {
