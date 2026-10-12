@@ -8,6 +8,7 @@ import {
   previewDecider,
   problems,
   selectionLabel,
+  STOPPING_MESSAGE,
   type Output,
   type Reporter,
   type StartInfo,
@@ -93,6 +94,9 @@ export function humanReporter(output: Output, style: Style, options: HumanOption
     onFinish(result) {
       if (heartbeat) clearInterval(heartbeat);
       output.out(renderSummary(result, style));
+    },
+    onInterrupt() {
+      output.err(style.yellow(STOPPING_MESSAGE));
     },
   };
 }

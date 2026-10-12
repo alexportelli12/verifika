@@ -7,12 +7,14 @@ import {
   type SkipEstimate,
   type Style,
 } from "./human.ts";
-import type { Reporter, StartInfo } from "./reporter.ts";
+import { STOPPING_MESSAGE, type Reporter, type StartInfo } from "./reporter.ts";
 
 /** What the live block needs from a terminal. Injected so tests can use a fake one. */
 export interface LiveTerminal {
   /** Writes to the terminal (stdout). */
   write(text: string): void;
+  /** Writes to stderr, which shares the terminal. */
+  writeError(text: string): void;
   /** Current size; read on every redraw, so a resized terminal is picked up. */
   columns(): number;
   rows(): number;
@@ -225,6 +227,17 @@ export function liveReporter(
     onFinish(result) {
       release(renderSummary(result, style));
     },
+    onInterrupt() {
+      // Clear the block first so the message lands above it, not inside it (or on top of
+      // the ^C the terminal echoed below it); the redrawn block then says it is stopping.
+      if (state) {
+        state.stopping = true;
+        terminal.write(clear());
+        drawn = 0;
+      }
+      terminal.writeError(style.yellow(STOPPING_MESSAGE));
+      draw();
+    },
     dispose() {
       release();
     },
@@ -234,10 +247,12 @@ export function liveReporter(
 /** The real terminal behind stdout. */
 export function systemTerminal(
   write: (text: string) => void,
+  writeError: (text: string) => void,
   stream: NodeJS.WriteStream,
 ): LiveTerminal {
   return {
     write,
+    writeError,
     columns: () => stream.columns || 80,
     rows: () => stream.rows || 24,
     now: () => performance.now(),

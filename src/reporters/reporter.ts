@@ -26,9 +26,14 @@ export interface Reporter {
   onCheckOutput?(name: string, line: string): void;
   onCheckEnd?(result: CheckResult): void;
   onFinish(result: RunResult): void;
+  /** The user asked to stop (first SIGINT/SIGTERM/SIGHUP); running checks are being terminated. */
+  onInterrupt?(): void;
   /** Releases anything the reporter holds (such as the terminal), however the run ended. */
   dispose?(): void;
 }
+
+/** Printed to stderr in human mode on the first interrupt. */
+export const STOPPING_MESSAGE = "stopping… (Ctrl-C again to force)\n";
 
 /** Previews are shown for at most this many failed checks, to keep output bounded. */
 export const MAX_PREVIEWED_FAILURES = 3;

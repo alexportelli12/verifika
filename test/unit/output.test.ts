@@ -266,6 +266,12 @@ describe("human output", () => {
     );
   });
 
+  it("tells the user how to force an interrupt, on stderr", () => {
+    const err: string[] = [];
+    humanReporter({ out: () => undefined, err: (text) => err.push(text) }, plain).onInterrupt?.();
+    expect(err).toEqual(["stopping… (Ctrl-C again to force)\n"]);
+  });
+
   it("lines durations up in a column", () => {
     const out: string[] = [];
     const reporter = humanReporter({ out: (text) => out.push(text), err: () => undefined }, plain);

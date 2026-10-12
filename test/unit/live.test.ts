@@ -66,6 +66,7 @@ function fakeTerminal(size = { columns: 60, rows: 20 }) {
   let exitHook: (() => void) | undefined;
   const terminal: LiveTerminal = {
     write: (text) => screen.write(text),
+    writeError: (text) => screen.write(text),
     columns: () => size.columns,
     rows: () => size.rows,
     now: () => clock,
@@ -339,6 +340,24 @@ describe("live reporter", () => {
     expect(disposed.screen.cursorHidden).toBe(false);
     expect(disposed.ticking).toBe(false);
     expect(disposed.screen.text()).toBe("verifika · full run (--all) · 4 checks · 2 parallel");
+  });
+
+  it("prints the interrupt message above a cleared block that says it is stopping", () => {
+    const fake = fakeTerminal();
+    const reporter = liveReporter(fake.terminal, plain);
+    reporter.onStart?.(start);
+    reporter.onCheckStart?.("build");
+    fake.screen.write("^C"); // the terminal's echo, at the cursor below the block
+    reporter.onInterrupt?.();
+    expect(fake.screen.text()).toBe(
+      [
+        "verifika · full run (--all) · 4 checks · 2 parallel",
+        "stopping… (Ctrl-C again to force)",
+        "[0/4] 0.0s · stopping…",
+        "⠋ build   0.0s",
+        "  lint, test, pack  will not start",
+      ].join("\n"),
+    );
   });
 
   it("restores the cursor if the process exits mid-run", () => {

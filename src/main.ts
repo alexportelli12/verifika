@@ -209,18 +209,20 @@ export async function main(argv: string[], io: Io): Promise<number> {
         : {}),
     });
     try {
-      const result = await withInterruptHandling((signal) =>
-        runVerification({
-          config,
-          selection,
-          concurrency,
-          failFast,
-          previewLines,
-          signal,
-          reporter,
-          version: version(),
-          env: io.env,
-        }),
+      const result = await withInterruptHandling(
+        () => reporter.onInterrupt?.(),
+        (signal) =>
+          runVerification({
+            config,
+            selection,
+            concurrency,
+            failFast,
+            previewLines,
+            signal,
+            reporter,
+            version: version(),
+            env: io.env,
+          }),
       );
       return result.exitCode;
     } finally {
@@ -368,13 +370,17 @@ function reportError(error: VerifikaError, mode: OutputMode, io: Io): void {
  * gracefully; a second one kills them immediately.
  */
 async function withInterruptHandling<T>(
+  onFirstSignal: () => void,
   operation: (signal: AbortSignal) => Promise<T>,
 ): Promise<T> {
   const controller = new AbortController();
   const signals: NodeJS.Signals[] = ["SIGINT", "SIGTERM", "SIGHUP"];
   const onSignal = (signal: NodeJS.Signals) => {
     if (controller.signal.aborted) killAllNow();
-    else controller.abort(signal);
+    else {
+      onFirstSignal();
+      controller.abort(signal);
+    }
   };
   for (const signal of signals) process.on(signal, onSignal);
   try {

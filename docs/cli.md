@@ -181,7 +181,7 @@ A check's own exit code is in the JSON result and the agent output (`typecheck: 
 
 ## Signals
 
-The first SIGINT, SIGTERM or SIGHUP stops scheduling, sends SIGTERM to every running check's process group (on Windows, `taskkill /T /F`), waits up to two seconds, then kills what is left. The run is recorded as `interrupted`. A second signal kills running checks immediately. If Verifika itself is killed with SIGKILL it cannot clean up: because each check runs in its own process group, checks that are already running keep running, and the run stays `running` in `run.json`. Harnesses and CI timeouts that hard-kill processes should send SIGTERM first.
+The first SIGINT, SIGTERM or SIGHUP stops scheduling, sends SIGTERM to every running check's process group (on Windows, `taskkill /T /F`), waits up to two seconds, then kills what is left. The run is recorded as `interrupted`. A second signal kills running checks immediately. In human mode the first signal also prints `stopping… (Ctrl-C again to force)` to stderr; the live status block is cleared first and then shows the run as stopping. If Verifika itself is killed with SIGKILL it cannot clean up: because each check runs in its own process group, checks that are already running keep running, and the run stays `running` in `run.json`. Harnesses and CI timeouts that hard-kill processes should send SIGTERM first.
 
 When a check's main process exits, Verifika makes sure nothing it started is left running before recording the result:
 

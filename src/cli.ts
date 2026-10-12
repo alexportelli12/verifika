@@ -21,7 +21,7 @@ main(process.argv.slice(2), {
   out: write(process.stdout),
   err: write(process.stderr),
   ...(process.stdout.isTTY
-    ? { terminal: systemTerminal(write(process.stdout), process.stdout) }
+    ? { terminal: systemTerminal(write(process.stdout), write(process.stderr), process.stdout) }
     : {}),
 }).then(
   (code) => {
