@@ -43,8 +43,15 @@ See [change detection semantics](configuration.md#change-detection-semantics).
 | `vfk logs --failed`      | Print the logs of every failed, timed-out or errored check, each with a header. |
 | `--tail <lines>`         | Print only the last lines of each log.                                          |
 | `--run <id>`             | Read that run instead of the latest.                                            |
+| `--no-pager`             | Print log contents directly instead of through the pager.                       |
 
 Logs are stored exactly as the command printed them. When `vfk logs` writes to a pipe or file (as it does for agents), it strips terminal colour codes that some tools emit even when not attached to a terminal; on an interactive terminal they are kept.
+
+On an interactive terminal in `human` mode (the default there), `vfk logs` is formatted for a person. With `--mode agent` or `VERIFIKA_MODE=agent` it stays plain, so an agent running in a pseudo-terminal never waits on a pager:
+
+- The run summary shows the start in local time with its age (`today 01:12, 3m ago`) instead of the UTC timestamp, which is kept when the output goes to a pipe or file.
+- Log paths are clickable [OSC 8](https://gist.github.com/egmontkob/eb114294efbcd5adb1944c9f3cb5feda) `file://` links, unless CI is detected, `TERM` is `dumb` or `VERIFIKA_HYPERLINKS=0`.
+- Log contents go through `$PAGER`, or `less -R -F -X` when it is unset (like git, `LESS=FRX` is set for the pager unless you set `LESS`). If the pager program is not installed (for example `less` on Windows), logs print directly. `--tail` and `--no-pager` never page, and nothing is paged when stdout is not a terminal.
 
 ## Output (`--mode`)
 
@@ -195,9 +202,11 @@ If any of this cannot be confirmed, the check is reported as `error` with reason
 
 ## Environment variables
 
-| Variable        | Effect                                                     |
-| --------------- | ---------------------------------------------------------- |
-| `VERIFIKA_MODE` | Default output mode.                                       |
-| `NO_COLOR`      | Disables colour in human mode.                             |
-| `FORCE_COLOR`   | Enables colour in human mode without a terminal.           |
-| `VERIFIKA_LIVE` | `0` turns off the live status block (same as `--no-live`). |
+| Variable              | Effect                                                        |
+| --------------------- | ------------------------------------------------------------- |
+| `VERIFIKA_MODE`       | Default output mode.                                          |
+| `NO_COLOR`            | Disables colour in human mode.                                |
+| `FORCE_COLOR`         | Enables colour in human mode without a terminal.              |
+| `VERIFIKA_LIVE`       | `0` turns off the live status block (same as `--no-live`).    |
+| `VERIFIKA_HYPERLINKS` | `0` turns off clickable log paths in `vfk logs`.              |
+| `PAGER`               | Pager for `vfk logs` on a terminal (default `less -R -F -X`). |

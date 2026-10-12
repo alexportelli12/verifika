@@ -4,7 +4,8 @@ import { parseArgs, type ParseArgsConfig } from "node:util";
 import { findConfigFile, loadConfig } from "./config.ts";
 import { ExitCode, VerifikaError } from "./errors.ts";
 import { initConfig } from "./init.ts";
-import { showLogs } from "./logs.ts";
+import { showLogs, type LogsRequest } from "./logs.ts";
+import { pagerAvailable, pagerCommand } from "./pager.ts";
 import { plan, type PlanRequest } from "./planner.ts";
 import { killAllNow } from "./process.ts";
 import { agentReporter } from "./reporters/agent.ts";
@@ -59,6 +60,8 @@ Logs:
       --failed                    Print logs of every failed check
       --tail <lines>              Print only the last lines of each log
       --run <id>                  Read a specific run instead of the latest
+      --no-pager                  Print logs directly instead of through $PAGER
+                                  (paging only happens on a terminal)
 
 Output:
       --mode <mode>               human | agent | json | quiet
@@ -104,6 +107,7 @@ const OPTIONS = {
     failed: { type: "boolean" },
     tail: { type: "string" },
     run: { type: "string" },
+    "no-pager": { type: "boolean" },
   },
   init: { ...SHARED, force: { type: "boolean" } },
   help: SHARED,
@@ -155,6 +159,9 @@ export async function main(argv: string[], io: Io): Promise<number> {
           ...(values.run !== undefined ? { runId: values.run as string } : {}),
           ...(values.tail !== undefined ? { tail: integerOption(values.tail, "--tail", 1) } : {}),
           stripAnsi: !io.isTTY,
+          env: io.env,
+          // Agents in a pseudo-terminal must never get a pager waiting for a keypress.
+          ...(mode === "human" ? logsDisplay(io, values["no-pager"] === true) : {}),
         },
         io,
       );
@@ -339,6 +346,20 @@ function reporterFor(
     case "quiet":
       return quietReporter(io);
   }
+}
+
+/**
+ * On a terminal, `vfk logs` speaks to a person: local relative times, clickable
+ * log paths (not in CI, whose log viewers show escape codes), and a pager.
+ */
+function logsDisplay(io: Io, noPager: boolean): Pick<LogsRequest, "display" | "pager"> {
+  if (!io.isTTY) return {};
+  const capable = !detectCi(io.env).ci && io.env.TERM !== "dumb";
+  const pager = pagerCommand(io.env);
+  return {
+    display: { now: new Date(), hyperlinks: capable && !isOff(io.env.VERIFIKA_HYPERLINKS) },
+    ...(noPager || !pagerAvailable(pager, io.env) ? {} : { pager }),
+  };
 }
 
 /** Colour on a terminal unless NO_COLOR is set; FORCE_COLOR enables it elsewhere. */

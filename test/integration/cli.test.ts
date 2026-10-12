@@ -3,6 +3,7 @@ import { existsSync, readdirSync, readFileSync, utimesSync, writeFileSync } from
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
+import { main } from "../../src/main.ts";
 import type { RunResult } from "../../src/types.ts";
 import {
   CLI,
@@ -561,6 +562,54 @@ describe("verifika logs", () => {
     const unknown = await runCli(root, ["logs", "nope"]);
     expect(unknown.code).toBe(2);
     expect(unknown.stderr).toContain("no check named nope");
+  });
+
+  it("pages log contents on a terminal, never with --tail or --no-pager, and falls back without a pager", async () => {
+    const root = project({ build: { command: "node check.mjs fail 1 broken" } });
+    await runCli(root, ["--all"]);
+    const pager = path.join(root, "pager.mjs");
+    const paged = path.join(root, "paged.txt");
+    writeFileSync(
+      pager,
+      'import { createWriteStream } from "node:fs";\nprocess.stdin.pipe(createWriteStream(process.argv[2]));\n',
+    );
+    const terminal = async (args: string[], env: NodeJS.ProcessEnv) => {
+      let out = "";
+      const code = await main(args, {
+        cwd: root,
+        env: cleanEnv(env),
+        isTTY: true,
+        out: (text) => (out += text),
+        err: () => undefined,
+      });
+      return { code, out };
+    };
+    const withPager = { PAGER: `"${process.execPath}" "${pager}" "${paged}"` };
+
+    const content = "starting up\nnoise line\nsrc/app.ts(3,7): error TS2322: broken\n";
+    const logs = await terminal(["logs", "build"], withPager);
+    expect(logs).toEqual({ code: 0, out: "" });
+    expect(readFileSync(paged, "utf8")).toBe(content);
+
+    for (const args of [
+      ["logs", "build", "--tail", "5"],
+      ["logs", "build", "--no-pager"],
+      ["logs", "build", "--mode", "agent"],
+    ]) {
+      expect((await terminal(args, withPager)).out).toBe(content);
+    }
+    // An agent in a pseudo-terminal must never get a pager.
+    expect((await terminal(["logs", "build"], { ...withPager, VERIFIKA_MODE: "agent" })).out).toBe(
+      content,
+    );
+    const missing = await terminal(["logs", "build"], { PAGER: "no-such-pager-anywhere -R" });
+    expect(missing.out).toBe(content);
+
+    // The summary is never paged; on a terminal it shows local, relative time.
+    const summary = await terminal(["logs"], { ...withPager, VERIFIKA_HYPERLINKS: "0" });
+    expect(summary.out).toMatch(/^Run \S+ · failed · \S+ · today \d\d:\d\d, (just now|\d+s ago)\n/);
+    expect(summary.out).not.toContain("\u001b]8;;");
+    expect((await terminal(["logs"], withPager)).out).toContain("\u001b]8;;file://");
   });
 
   it("strips forced colour codes from logs printed to a pipe", async () => {
