@@ -63,6 +63,21 @@ try {
   );
   assert(forbidden.length === 0, `package contains development files: ${forbidden.join(", ")}`);
   assert(pack.unpackedSize < 512 * 1024, `package unexpectedly large: ${pack.unpackedSize} bytes`);
+  assert(
+    !manifest.private && manifest.engines?.node,
+    "package must be publishable and declare engines.node",
+  );
+  assert(
+    Object.values(manifest.bin).every((target) => target === "dist/cli.js"),
+    "every bin entry must point at dist/cli.js",
+  );
+  assert(
+    readFileSync(path.join(repo, "dist", "cli.js"), "utf8").startsWith("#!/usr/bin/env node\n"),
+    "dist/cli.js lacks the node shebang",
+  );
+  // Windows has no executable bit to pack; elsewhere the tarball must carry it.
+  const cliMode = pack.files.find((file) => file.path === "dist/cli.js").mode;
+  assert(isWindows || (cliMode & 0o111) !== 0, `dist/cli.js is packed without execute permission`);
 
   // 2. Install into an isolated project.
   const project = path.join(work, "project");

@@ -35,8 +35,21 @@ npm run verify          # the full quality gate, run by Verifika itself
 
 ## Releasing (maintainers)
 
-1. Update `version` in `package.json` and the `CHANGELOG.md` section.
-2. Merge to `main` with CI green.
-3. Tag and push: `git tag v1.2.3 && git push origin v1.2.3`.
+Pushing a `v<version>` tag runs the [release workflow](.github/workflows/release.yml). It checks that the tag matches `package.json` and is on `main`, runs the full gate, publishes the tested tarball to npm through [trusted publishing](https://docs.npmjs.com/trusted-publishers) (OIDC, with provenance; no npm token is stored), and creates the GitHub release with the tarball attached. Versions already on npm are not published again, so a failed run can be re-run safely.
 
-The release workflow verifies the tag matches `package.json`, runs the full gate, packs the package and creates the GitHub release from the changelog with `verifika-<version>.tgz` attached. Verifika is not published to the npm registry yet; `"private": true` in `package.json` prevents accidental publishing.
+### Releasing a new version
+
+1. In a pull request, update `version` in `package.json` (`npm version <x.y.z> --no-git-tag-version`) and add the `CHANGELOG.md` section.
+2. Merge to `main` with CI green.
+3. Tag the merge commit and push the tag: `git tag v<x.y.z> && git push origin v<x.y.z>`.
+4. Approve the `release` deployment in the workflow run, if the environment requires a reviewer.
+
+### One-time setup (first release only)
+
+npm can only attach a trusted publisher to a package that already exists, so the first version is published by hand:
+
+1. Enable two-factor authentication on the npm account (npmjs.com → Account → Two-Factor Authentication).
+2. From a clean checkout of `main` at the release commit: `npm ci && npm run verify && npm publish --access public`.
+3. On npmjs.com → `verifika` → Settings → Trusted publishing, add a GitHub Actions publisher: user `alexportelli12`, repository `verifika`, workflow `release.yml`, environment `release`. Then, under Publishing access, choose "Require two-factor authentication and disallow tokens".
+4. On GitHub → Settings → Environments → `release` (created by the first workflow run, or add it by hand), add yourself as a required reviewer and limit deployments to tags matching `v*.*.*`.
+5. Push the `v<version>` tag. The workflow sees the version is already on npm, skips publishing and creates the GitHub release.

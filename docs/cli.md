@@ -88,7 +88,7 @@ For `run` and `plan`, `--mode json` prints exactly one JSON document to stdout, 
 ```json
 {
   "schemaVersion": 1,
-  "tool": { "name": "verifika", "version": "1.0.0" },
+  "tool": { "name": "verifika", "version": "0.0.1" },
   "runId": "20261012-143955-042-a1b2c3",
   "status": "failed",
   "exitCode": 1,

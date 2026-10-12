@@ -1,6 +1,6 @@
 # Validation and benchmarks
 
-Before 1.0.0, Verifika was run against two real projects and compared with the sequential `verify-runner` script those projects used before. The source repositories were not modified: all runs happened in disposable clones, with a `verifika.config.json` that translated each project's existing `npm run verify` checks one to one.
+Before its first release, Verifika was run against two real projects and compared with the sequential `verify-runner` script those projects used before. The source repositories were not modified: all runs happened in disposable clones, with a `verifika.config.json` that translated each project's existing `npm run verify` checks one to one.
 
 Measured on 2026-10-12. Machine: 8 vCPU (QEMU), 15 GiB RAM, Linux 6.12, Node 24.19.0. Every timed run waited for a 1-minute load average below 1.5 (idle ≈ 0.5); the load at the start of each run was 1.29–1.48. Treat the numbers as indicative for this machine, not as guarantees.
 

@@ -32,21 +32,18 @@ _Verifika_ is Maltese for "verification".
 
 Requires Node.js 22.13 or newer.
 
-Verifika is distributed as a prebuilt package attached to each [GitHub release](https://github.com/alexportelli12/verifika/releases) (it is not on the npm registry yet). Install it as a dev dependency from the release URL:
-
 ```sh
-npm install --save-dev https://github.com/alexportelli12/verifika/releases/download/v1.0.0/verifika-1.0.0.tgz
+npm install --save-dev verifika
 ```
 
-npm records the URL in `package.json` and the lockfile, so everyone on the project gets the same build. Then run it with `npx verifika`.
-
-The package also installs `vfk`, a shorthand for the same command: `npx vfk plan` is `npx verifika plan`. The docs use `verifika` throughout.
-
-To try it without adding a dependency:
+The package installs two commands: `verifika` and its shorthand `vfk`. They are the same program, so use whichever you prefer:
 
 ```sh
-npx --package https://github.com/alexportelli12/verifika/releases/download/v1.0.0/verifika-1.0.0.tgz verifika --help
+npx verifika plan    # same as: npx vfk plan
+npx vfk --all        # same as: npx verifika --all
 ```
+
+The docs use `verifika` throughout. To install it globally instead, run `npm install --global verifika`; to try it without installing, run `npx verifika --help`.
 
 ## Quick start
 

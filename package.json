@@ -1,7 +1,6 @@
 {
   "name": "verifika",
-  "private": true,
-  "version": "1.0.0",
+  "version": "0.0.1",
   "description": "Deterministic, agent-friendly repository verification: run the checks your changes need, concurrently, with minimal output.",
   "keywords": [
     "verify",
@@ -44,7 +43,7 @@
     "node": ">=22.13.0"
   },
   "scripts": {
-    "build": "node scripts/clean-dist.mjs && tsc -p tsconfig.build.json",
+    "build": "node scripts/clean-dist.mjs && tsc -p tsconfig.build.json && node -e \"fs.chmodSync('dist/cli.js', 0o755)\"",
     "typecheck": "tsc -p tsconfig.json",
     "lint": "eslint .",
     "format": "prettier --write .",
