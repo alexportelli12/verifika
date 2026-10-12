@@ -81,19 +81,43 @@ try {
     "schema not installed",
   );
   assert(existsSync(path.join(installed, "skills", "verifika", "SKILL.md")), "skill not installed");
-  assert(
-    existsSync(path.join(project, "node_modules", ".bin", isWindows ? "verifika.cmd" : "verifika")),
-    "bin link not created",
-  );
+  const bins = ["verifika", "vfk"];
+  for (const bin of bins) {
+    assert(
+      existsSync(path.join(project, "node_modules", ".bin", isWindows ? `${bin}.cmd` : bin)),
+      `${bin} bin link not created`,
+    );
+  }
 
-  // 3. Exercise the installed CLI through the bin link, from inside the project.
-  const run = (args) =>
-    spawnSync(isWindows ? "npx.cmd" : "npx", ["--no-install", "verifika", ...args], {
+  // 3. Exercise the installed CLI through each bin link, from inside the project.
+  // Every scenario runs through both executables, which must behave identically.
+  const runWith = (bin, args) =>
+    spawnSync(isWindows ? "npx.cmd" : "npx", ["--no-install", bin, ...args], {
       cwd: project,
       encoding: "utf8",
       shell: isWindows,
       env: { ...process.env, VERIFIKA_MODE: "" },
     });
+  // Run ids, durations and timestamps differ between any two runs; mask them.
+  const mask = (text) =>
+    text.replace(
+      /\d{8}-\d{6}-\d{3}-[0-9a-f]{6}|\d{4}-\d\d-\d\dT[\d:.]+Z|\b\d+(?:\.\d+)?m?s\b|("durationMs": ?)\d+/g,
+      "$1#",
+    );
+  const comparable = ({ status, stdout, stderr }) =>
+    JSON.stringify({ status, stdout: mask(stdout), stderr: mask(stderr) });
+  const run = (args) => {
+    const [first, ...others] = bins.map((bin) => runWith(bin, args));
+    for (const [index, other] of others.entries()) {
+      assert(
+        comparable(other) === comparable(first),
+        `${bins[index + 1]} ${args.join(" ")} differs from ${bins[0]}:\n${comparable(other)}\n${comparable(first)}`,
+      );
+    }
+    return first;
+  };
+  const help = run(["--help"]);
+  assert(help.status === 0 && help.stdout.includes("vfk"), "--help failed");
   const version = run(["--version"]);
   assert(
     version.stdout.trim() === manifest.version,

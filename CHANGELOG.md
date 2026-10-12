@@ -8,6 +8,7 @@ First stable release.
 
 ### Added
 
+- `vfk`: a shorthand executable for `verifika`, installed by the same package.
 - `verifika` / `verifika run`: runs configured checks concurrently with dependency ordering, per-check timeouts, optional fail-fast, process-tree cleanup and signal handling.
 - Safety defaults: checks run sequentially unless `defaults.concurrency` or `-j` opts into parallelism; CI always runs the full suite unless `--changed`/`--changed-since` is passed explicitly (environment variables cannot switch CI mode off); a check passes only if its process tree was confirmed cleaned up; concurrent Verifika invocations in one directory keep their run records and logs apart.
 - Hybrid selection: selective runs from git changes locally (`changes.base`, `--changed`, `--changed-since <ref>` with merge-base semantics), full runs in CI and with `--all`, explicit `--check`. Global invalidation (`invalidateAll`), `paths`/`exclude` globs, `always` checks and `dependsOn`.

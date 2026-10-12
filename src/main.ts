@@ -33,6 +33,8 @@ Usage:
   verifika logs [check...]        Show logs from the latest run
   verifika init [--force]         Create verifika.config.json from package.json scripts
 
+vfk is a shorthand for verifika: vfk plan, vfk --all, ...
+
 Selection (run, plan):
       --all                       Run every check
   -c, --check <name>              Run only these checks and their dependencies

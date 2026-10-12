@@ -40,6 +40,8 @@ npm install --save-dev https://github.com/alexportelli12/verifika/releases/downl
 
 npm records the URL in `package.json` and the lockfile, so everyone on the project gets the same build. Then run it with `npx verifika`.
 
+The package also installs `vfk`, a shorthand for the same command: `npx vfk plan` is `npx verifika plan`. The docs use `verifika` throughout.
+
 To try it without adding a dependency:
 
 ```sh

@@ -9,6 +9,8 @@ verifika init [--force]         Create verifika.config.json from package.json sc
 
 The command, if any, comes first. `verifika` with no command is `verifika run`.
 
+`vfk` is installed alongside `verifika` as a shorthand; it is the same executable and accepts everything below.
+
 ## Selection (`run`, `plan`)
 
 At most one of these may be given. Without any, Verifika runs selectively on a developer machine and fully in CI.

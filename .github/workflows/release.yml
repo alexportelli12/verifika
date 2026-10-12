@@ -55,6 +55,8 @@ jobs:
           \`\`\`sh
           npm install --save-dev https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}/verifika-${VERSION}.tgz
           \`\`\`
+
+          Then run \`npx verifika\`, or the shorthand \`npx vfk\`.
           NOTES
           if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
             gh release upload "$GITHUB_REF_NAME" "verifika-$VERSION.tgz" --clobber

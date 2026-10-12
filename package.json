@@ -27,7 +27,8 @@
   "author": "Alex Portelli",
   "type": "module",
   "bin": {
-    "verifika": "dist/cli.js"
+    "verifika": "dist/cli.js",
+    "vfk": "dist/cli.js"
   },
   "exports": {
     "./package.json": "./package.json",
