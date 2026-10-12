@@ -9,13 +9,14 @@ import { plan, type PlanRequest } from "./planner.ts";
 import { killAllNow } from "./process.ts";
 import { agentReporter } from "./reporters/agent.ts";
 import { detectCi } from "./ci.ts";
-import { colors, humanReporter, plain, type Style } from "./reporters/human.ts";
+import { colors, humanReporter, plain, type SkipEstimate, type Style } from "./reporters/human.ts";
 import { jsonReporter } from "./reporters/json.ts";
 import { liveReporter, type LiveTerminal } from "./reporters/live.ts";
 import { planJson, renderPlan } from "./reporters/plan.ts";
 import { quietReporter } from "./reporters/quiet.ts";
 import { OUTPUT_MODES, type Output, type OutputMode, type Reporter } from "./reporters/reporter.ts";
 import { runVerification } from "./runner.ts";
+import { estimateSkipped } from "./runs.ts";
 
 export interface Io extends Output {
   cwd: string;
@@ -199,7 +200,14 @@ export async function main(argv: string[], io: Io): Promise<number> {
         ? integerOption(values.preview, "--preview", 0)
         : DEFAULT_PREVIEW_LINES;
 
-    const reporter = reporterFor(mode, io, { live: values["no-live"] !== true });
+    const skipped = selection.checks.filter((check) => !check.selected).map((check) => check.name);
+    const reporter = reporterFor(mode, io, {
+      live: values["no-live"] !== true,
+      // Only people see the estimate; other modes skip reading earlier runs.
+      ...(mode === "human" && skipped.length > 0
+        ? { skipEstimate: await estimateSkipped(config.root, skipped) }
+        : {}),
+    });
     try {
       const result = await withInterruptHandling((signal) =>
         runVerification({
@@ -300,7 +308,11 @@ function guessMode(argv: string[], io: Io): OutputMode {
       : "agent";
 }
 
-function reporterFor(mode: OutputMode, io: Io, options: { live: boolean }): Reporter {
+function reporterFor(
+  mode: OutputMode,
+  io: Io,
+  options: { live: boolean; skipEstimate?: SkipEstimate },
+): Reporter {
   switch (mode) {
     case "human": {
       const style = humanStyle(io);
@@ -313,8 +325,9 @@ function reporterFor(mode: OutputMode, io: Io, options: { live: boolean }): Repo
         !detectCi(io.env).ci &&
         io.env.TERM !== "dumb" &&
         !isOff(io.env.VERIFIKA_LIVE);
-      if (live && io.terminal) return liveReporter(io.terminal, style);
-      return humanReporter(io, style, { heartbeat: io.isTTY });
+      const estimate = options.skipEstimate ? { skipEstimate: options.skipEstimate } : {};
+      if (live && io.terminal) return liveReporter(io.terminal, style, estimate);
+      return humanReporter(io, style, { heartbeat: io.isTTY, ...estimate });
     }
     case "agent":
       return agentReporter(io);

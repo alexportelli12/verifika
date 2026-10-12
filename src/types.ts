@@ -80,6 +80,8 @@ export interface CheckResult {
   preview: string[];
   /** Why the check could not be started or its processes not cleaned up (status `error`). */
   error: string | null;
+  /** For status `blocked`: the dependency that did not pass. Absent otherwise. */
+  blockedBy?: string;
 }
 
 /** `running` is only ever on disk, for a run that has not finished (or crashed). */

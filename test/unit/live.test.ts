@@ -287,7 +287,7 @@ describe("live reporter", () => {
     fake.advance(100);
     expect(fake.screen.text()).toBe(
       [
-        "verifika full run (--all)",
+        "verifika · full run (--all) · 4 checks · 2 parallel",
         "[0/4] 0.2s",
         "⠹ build   0.2s  step 2",
         "  lint  queued",
@@ -338,7 +338,7 @@ describe("live reporter", () => {
     reporter.dispose?.();
     expect(disposed.screen.cursorHidden).toBe(false);
     expect(disposed.ticking).toBe(false);
-    expect(disposed.screen.text()).toBe("verifika full run (--all)");
+    expect(disposed.screen.text()).toBe("verifika · full run (--all) · 4 checks · 2 parallel");
   });
 
   it("restores the cursor if the process exits mid-run", () => {

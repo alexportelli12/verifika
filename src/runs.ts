@@ -178,6 +178,48 @@ function isProcessAlive(pid: number): boolean {
   }
 }
 
+/**
+ * Estimates the time saved by skipping `names`: each check's duration in the most
+ * recent retained run where it ran to completion (passed or failed).
+ */
+export async function estimateSkipped(
+  root: string,
+  names: string[],
+): Promise<{ knownMs: number; unknown: number }> {
+  const found = new Map<string, number>();
+  let runs: string[] = [];
+  try {
+    runs = (await readdir(path.join(root, STATE_DIR, RUNS_DIR)))
+      .filter((name) => RUN_ID_PATTERN.test(name))
+      .sort()
+      .reverse();
+  } catch {
+    // No runs yet: nothing is known.
+  }
+  const wanted = new Set(names);
+  for (const id of runs) {
+    if (found.size === wanted.size) break;
+    let run: Partial<RunResult>;
+    try {
+      run = JSON.parse(await readFile(path.join(runDirectory(root, id), RESULT_FILE), "utf8"));
+    } catch {
+      continue;
+    }
+    for (const check of run.checks ?? []) {
+      if (
+        wanted.has(check.name) &&
+        !found.has(check.name) &&
+        (check.status === "passed" || check.status === "failed") &&
+        typeof check.durationMs === "number"
+      ) {
+        found.set(check.name, check.durationMs);
+      }
+    }
+  }
+  const knownMs = [...found.values()].reduce((total, ms) => total + ms, 0);
+  return { knownMs, unknown: wanted.size - found.size };
+}
+
 export async function readRun(root: string, runId?: string): Promise<RunResult> {
   const id = runId ?? (await readLatest(root));
   if (id === null) {

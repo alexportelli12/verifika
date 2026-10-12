@@ -241,7 +241,12 @@ function notRunResult(
   firstFailure: string | null,
 ): CheckResult | null {
   if (outcome.state === "blocked") {
-    return { ...base, status: "blocked", reason: `dependency ${outcome.dependency} did not pass` };
+    return {
+      ...base,
+      status: "blocked",
+      reason: `dependency ${outcome.dependency} did not pass`,
+      blockedBy: outcome.dependency,
+    };
   }
   if (outcome.state !== "not_started") return null;
   if (interrupted)

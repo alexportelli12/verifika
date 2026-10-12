@@ -1,5 +1,12 @@
 import { formatSeconds } from "../format.ts";
-import { renderCheckEnd, renderStart, renderSummary, type Style } from "./human.ts";
+import {
+  nameWidth,
+  renderCheckEnd,
+  renderStart,
+  renderSummary,
+  type SkipEstimate,
+  type Style,
+} from "./human.ts";
 import type { Reporter, StartInfo } from "./reporter.ts";
 
 /** What the live block needs from a terminal. Injected so tests can use a fake one. */
@@ -56,7 +63,7 @@ export function renderBlock(state: BlockState, view: Viewport, style: Style): st
   const max = Math.max(1, view.width - 1);
   const elapsed = formatSeconds(view.now - state.startedAt);
   const header = `[${state.finished.size}/${state.selected.length}] ${elapsed}${state.stopping ? " · stopping…" : ""}`;
-  const nameWidth = Math.max(...state.selected.map((name) => name.length));
+  const namePad = nameWidth(state.selected);
   const frame = SPINNER[Math.floor(view.now / FRAME_MS) % SPINNER.length] as string;
 
   const running = state.selected
@@ -64,10 +71,10 @@ export function renderBlock(state: BlockState, view: Viewport, style: Style): st
     .map((name) => {
       const { since, line } = state.running.get(name) as { since: number; line: string };
       const time = formatSeconds(view.now - since).padStart(5);
-      const prefix = `${frame} ${name.padEnd(nameWidth)}  ${time}`;
+      const prefix = `${frame} ${name.padEnd(namePad)}  ${time}`;
       if (prefix.length + 2 >= max) return fit(prefix, max);
       const shown = fit(line, max - prefix.length - 2);
-      return `${frame} ${name.padEnd(nameWidth)}  ${style.dim(time)}${shown ? `  ${style.dim(shown)}` : ""}`;
+      return `${frame} ${name.padEnd(namePad)}  ${style.dim(time)}${shown ? `  ${style.dim(shown)}` : ""}`;
     });
   const groups = waitingGroups(state);
   const waiting = groups.map(({ names, why }) =>
@@ -147,11 +154,16 @@ export function fit(text: string, width: number): string {
  * removed when the run ends. The cursor is hidden while live and restored on
  * finish, on dispose (errors) and on process exit.
  */
-export function liveReporter(terminal: LiveTerminal, style: Style): Reporter {
+export function liveReporter(
+  terminal: LiveTerminal,
+  style: Style,
+  options: { skipEstimate?: SkipEstimate } = {},
+): Reporter {
   let state: BlockState | null = null;
   let drawn = 0;
   let stopTicker: (() => void) | undefined;
   let unregisterExit: (() => void) | undefined;
+  let width = 0;
 
   const clear = () => (drawn > 0 ? `\r${CSI}${drawn}A${CSI}J` : "");
   const draw = (above = "") => {
@@ -180,7 +192,8 @@ export function liveReporter(terminal: LiveTerminal, style: Style): Reporter {
 
   return {
     onStart(info: StartInfo) {
-      terminal.write(renderStart(info, style));
+      terminal.write(renderStart(info, style, options.skipEstimate));
+      width = nameWidth(info.selected);
       if (info.selected.length === 0) return;
       state = {
         selected: info.selected,
@@ -207,7 +220,7 @@ export function liveReporter(terminal: LiveTerminal, style: Style): Reporter {
     onCheckEnd(check) {
       state?.running.delete(check.name);
       state?.finished.set(check.name, check.status === "passed");
-      draw(renderCheckEnd(check, style));
+      draw(renderCheckEnd(check, style, width));
     },
     onFinish(result) {
       release(renderSummary(result, style));

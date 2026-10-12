@@ -6,6 +6,7 @@ import { descendantsOf, execCheck } from "../../src/process.ts";
 import {
   createRun,
   createRunId,
+  estimateSkipped,
   logPath,
   pruneRuns,
   readLatest,
@@ -33,6 +34,34 @@ describe("run ids", () => {
     expect(logPath("20260102-030405-000-abcdef", "lint")).toBe(
       ".verifika/runs/20260102-030405-000-abcdef/lint.log",
     );
+  });
+});
+
+describe("estimateSkipped", () => {
+  const runWith = (id: string, checks: Partial<RunResult["checks"][number]>[]) => ({
+    [`.verifika/runs/${id}/run.json`]: JSON.stringify({ runId: id, checks }),
+  });
+
+  it("uses each check's most recent completed duration", async () => {
+    const root = tempDir();
+    writeFiles(root, {
+      ...runWith("20260101-000000-000-aaaaaa", [
+        { name: "test", status: "passed", durationMs: 30_000 },
+        { name: "e2e", status: "failed", durationMs: 50_000 },
+      ]),
+      ...runWith("20260102-000000-000-bbbbbb", [
+        { name: "test", status: "failed", durationMs: 20_000 },
+        { name: "e2e", status: "interrupted", durationMs: 1_000 },
+        { name: "lint", status: "skipped", durationMs: null },
+      ]),
+      ".verifika/runs/20260103-000000-000-cccccc/run.json": "{ not json",
+    });
+    expect(await estimateSkipped(root, ["test", "e2e"])).toEqual({ knownMs: 70_000, unknown: 0 });
+    expect(await estimateSkipped(root, ["test", "lint"])).toEqual({ knownMs: 20_000, unknown: 1 });
+  });
+
+  it("knows nothing without recorded runs", async () => {
+    expect(await estimateSkipped(tempDir(), ["test"])).toEqual({ knownMs: 0, unknown: 1 });
   });
 });
 

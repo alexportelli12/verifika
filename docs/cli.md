@@ -56,6 +56,26 @@ On an interactive terminal, human mode shows a live status block below the finis
 
 The live block is used only when stdout is a terminal, no CI is detected, `TERM` is not `dumb`, and neither `--no-live` nor `VERIFIKA_LIVE=0` is set. Otherwise (including `--mode human` in CI, when piped, or in a log file) human mode prints one line per check start and end, a note every 30 seconds naming the checks still running, then the summary.
 
+Both forms share the same layout:
+
+```text
+verifika · selective: 3 files changed since HEAD (a1b2c3d) · 4 checks · 4 parallel
+3 skipped (~1m10s saved): format, skill, pack
+✓ typecheck  6.1s
+✗ lint       2.3s  exit 1
+✓ build      4.0s
+
+✗ lint  npm run lint → exit 1 · rerun: vfk -c lint
+    /repo/src/cart.ts
+      12:9  error  'total' is assigned a value but never used  no-unused-vars
+    ✖ 1 problem (1 error, 0 warnings)
+○ test  not run: lint failed
+✗ verification failed: 2 of 4 checks passed (12s)
+Logs: vfk logs lint
+```
+
+The time saved is estimated from each skipped check's most recent duration in the retained runs: `~` when every skipped check has one, `≥` when some do not, and no estimate when none do. A failed check shows its command and the command that reruns it. `○` marks a check that never ran because a dependency did not pass; `!` marks checks cancelled by fail-fast or interrupted.
+
 ### Agent output
 
 ```text
@@ -140,6 +160,7 @@ For `run` and `plan`, `--mode json` prints exactly one JSON document to stdout, 
 | `summary.failed`        | selected checks that failed, timed out or could not start                                                                                                             |
 | `summary.notRun`        | selected checks that were blocked, cancelled or interrupted                                                                                                           |
 | `checks[].log`          | path relative to `root`, or `null` when the check never started                                                                                                       |
+| `checks[].blockedBy`    | for `blocked` checks only: the dependency that did not pass (added in 0.0.3; absent otherwise)                                                                        |
 | `latest`                | `false` when another run started in the same directory after this one; `vfk logs` without `--run` then shows that other run                                           |
 
 Usage and configuration errors in JSON mode print `{"schemaVersion": 1, "status": "error", "exitCode": 2, "error": {"message": "...", "hint": "..."}}`.
