@@ -1,6 +1,6 @@
 {
   "name": "verifika",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "Deterministic, agent-friendly repository verification: run the checks your changes need, concurrently, with minimal output.",
   "keywords": [
     "verify",
