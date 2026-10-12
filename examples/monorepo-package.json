@@ -1,0 +1,19 @@
+{
+  "$schema": "../schemas/verifika.schema.json",
+  "version": 1,
+  "changes": {
+    "base": "origin/main",
+    "invalidateAll": [
+      "package.json",
+      "tsconfig*.json",
+      "../../package-lock.json",
+      "../../tsconfig.base.json"
+    ]
+  },
+  "checks": {
+    "lint": { "command": "npm run lint", "paths": ["src/**"] },
+    "test": { "command": "npm test", "paths": ["src/**", "test/**"] },
+    "build": { "command": "npm run build", "paths": ["src/**"] },
+    "audit": { "command": "npm audit --omit=dev --audit-level=high", "always": true }
+  }
+}

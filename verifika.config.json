@@ -1,0 +1,42 @@
+{
+  "$schema": "./schemas/verifika.schema.json",
+  "version": 1,
+  "defaults": {
+    "concurrency": 4,
+    "timeoutMs": 600000
+  },
+  "changes": {
+    "invalidateAll": ["package.json", "package-lock.json", "tsconfig*.json"]
+  },
+  "checks": {
+    "format": {
+      "command": "npm run format:check"
+    },
+    "lint": {
+      "command": "npm run lint",
+      "paths": ["**/*.{ts,js,mjs}", "eslint.config.js"]
+    },
+    "typecheck": {
+      "command": "npm run typecheck",
+      "paths": ["src/**", "test/**", "vitest.config.ts"]
+    },
+    "build": {
+      "command": "npm run build",
+      "paths": ["src/**"]
+    },
+    "test": {
+      "command": "npm test",
+      "paths": ["src/**", "test/**", "schemas/**", "vitest.config.ts"],
+      "dependsOn": ["build"]
+    },
+    "skill": {
+      "command": "npm run check:skill",
+      "paths": ["skills/**", "scripts/check-skill.mjs", "src/main.ts"]
+    },
+    "pack": {
+      "command": "npm run test:pack",
+      "paths": ["src/**", "schemas/**", "skills/**", "scripts/pack-smoke.mjs", "README.md"],
+      "dependsOn": ["build"]
+    }
+  }
+}

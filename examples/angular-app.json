@@ -1,0 +1,43 @@
+{
+  "$schema": "../schemas/verifika.schema.json",
+  "version": 1,
+  "defaults": {
+    "concurrency": 2,
+    "timeoutMs": 900000
+  },
+  "changes": {
+    "base": "HEAD",
+    "invalidateAll": [
+      "package.json",
+      "package-lock.json",
+      "angular.json",
+      "tsconfig*.json",
+      "eslint.config.*"
+    ]
+  },
+  "checks": {
+    "format": {
+      "command": "npm run format:check",
+      "paths": ["**/*.{ts,html,scss,css,json,md}"]
+    },
+    "lint": {
+      "command": "npm run lint",
+      "paths": ["src/**/*.{ts,html}"]
+    },
+    "unit": {
+      "command": "npm test -- --watch=false",
+      "paths": ["src/**"],
+      "exclude": ["src/**/*.md"]
+    },
+    "build": {
+      "command": "npm run build -- --configuration production",
+      "paths": ["src/**", "public/**"]
+    },
+    "e2e": {
+      "command": "npm run e2e",
+      "paths": ["src/**", "e2e/**", "playwright.config.ts"],
+      "dependsOn": ["build"],
+      "timeoutMs": 1200000
+    }
+  }
+}
