@@ -26,12 +26,13 @@ See [change detection semantics](configuration.md#change-detection-semantics).
 
 ## Execution (`run`)
 
-| Option                  | Effect                                                                                             |
-| ----------------------- | -------------------------------------------------------------------------------------------------- |
-| `-j, --concurrency <n>` | Maximum checks running at once. Default: `defaults.concurrency`, which defaults to 1 (sequential). |
-| `--fail-fast`           | After the first failure, terminate running checks and skip pending ones.                           |
-| `--no-fail-fast`        | Run every selected check even after failures (overrides `defaults.failFast`).                      |
-| `--preview <lines>`     | Failure preview lines per check in human and agent output. Default 10; 0 disables.                 |
+| Option                  | Effect                                                                                                  |
+| ----------------------- | ------------------------------------------------------------------------------------------------------- |
+| `-j, --concurrency <n>` | Maximum checks running at once. Default: `defaults.concurrency`, which defaults to 1 (sequential).      |
+| `--fail-fast`           | After the first failure, terminate running checks and skip pending ones.                                |
+| `--no-fail-fast`        | Run every selected check even after failures (overrides `defaults.failFast`).                           |
+| `--preview <lines>`     | Failure preview lines per check in human and agent output. Default 10; 0 disables.                      |
+| `--no-live`             | In human mode, print progress line by line instead of the live status block. Same as `VERIFIKA_LIVE=0`. |
 
 ## Logs (`logs`)
 
@@ -48,6 +49,12 @@ Logs are stored exactly as the command printed them. When `vfk logs` writes to a
 ## Output (`--mode`)
 
 `human`, `agent`, `json` or `quiet`. Default: `human` when stdout is a terminal, otherwise `agent`. The `VERIFIKA_MODE` environment variable sets the default. `human` mode uses colour on a terminal unless `NO_COLOR` is set (`FORCE_COLOR` enables it elsewhere).
+
+### Human output
+
+On an interactive terminal, human mode shows a live status block below the finished checks: progress (`[done/selected]`) and elapsed time, each running check with a spinner, its elapsed time and the last line it printed, and the checks still waiting (`test, pack  waiting on build`). The block is redrawn in place about ten times a second and removed when the run ends; finished checks print above it exactly as in line mode, so the scrollback reads the same either way.
+
+The live block is used only when stdout is a terminal, no CI is detected, `TERM` is not `dumb`, and neither `--no-live` nor `VERIFIKA_LIVE=0` is set. Otherwise (including `--mode human` in CI, when piped, or in a log file) human mode prints one line per check start and end, a note every 30 seconds naming the checks still running, then the summary.
 
 ### Agent output
 
@@ -165,8 +172,9 @@ If any of this cannot be confirmed, the check is reported as `error` with reason
 
 ## Environment variables
 
-| Variable        | Effect                                           |
-| --------------- | ------------------------------------------------ |
-| `VERIFIKA_MODE` | Default output mode.                             |
-| `NO_COLOR`      | Disables colour in human mode.                   |
-| `FORCE_COLOR`   | Enables colour in human mode without a terminal. |
+| Variable        | Effect                                                     |
+| --------------- | ---------------------------------------------------------- |
+| `VERIFIKA_MODE` | Default output mode.                                       |
+| `NO_COLOR`      | Disables colour in human mode.                             |
+| `FORCE_COLOR`   | Enables colour in human mode without a terminal.           |
+| `VERIFIKA_LIVE` | `0` turns off the live status block (same as `--no-live`). |

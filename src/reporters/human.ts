@@ -1,4 +1,4 @@
-import type { CheckStatus, RunResult } from "../types.ts";
+import type { CheckResult, CheckStatus, RunResult } from "../types.ts";
 import {
   describeProblem,
   duration,
@@ -9,6 +9,7 @@ import {
   selectionLabel,
   type Output,
   type Reporter,
+  type StartInfo,
 } from "./reporter.ts";
 
 export interface Style {
@@ -54,19 +55,9 @@ export function humanReporter(
   let heartbeat: ReturnType<typeof setInterval> | undefined;
 
   return {
-    onStart({ selection, selected }) {
-      const skipped = selection.checks.length - selected.length;
-      output.out(`${style.bold("verifika")} ${selectionLabel(selection, skipped)}\n`);
-      if (selected.length === 0) {
-        output.out(style.dim("Nothing to verify for these changes. Full run: vfk --all\n"));
-        return;
-      }
-      if (skipped > 0) {
-        const names = selection.checks
-          .filter((check) => !check.selected)
-          .map((check) => check.name);
-        output.out(style.dim(`skipped: ${names.join(", ")}\n`));
-      }
+    onStart(info) {
+      output.out(renderStart(info, style));
+      if (info.selected.length === 0) return;
       if (options.heartbeat) {
         heartbeat = setInterval(() => {
           if (running.size === 0) return;
@@ -85,16 +76,33 @@ export function humanReporter(
     },
     onCheckEnd(check) {
       running.delete(check.name);
-      const detail = check.status === "passed" ? "" : ` ${describeProblem(check)}`;
-      output.out(
-        `${symbol(check.status, style)} ${check.name} ${style.dim(duration(check.durationMs))}${detail}\n`,
-      );
+      output.out(renderCheckEnd(check, style));
     },
     onFinish(result) {
       if (heartbeat) clearInterval(heartbeat);
       output.out(renderSummary(result, style));
     },
   };
+}
+
+/** The run header: what was selected, and which checks were skipped. */
+export function renderStart({ selection, selected }: StartInfo, style: Style): string {
+  const skipped = selection.checks.length - selected.length;
+  let text = `${style.bold("verifika")} ${selectionLabel(selection, skipped)}\n`;
+  if (selected.length === 0) {
+    return text + style.dim("Nothing to verify for these changes. Full run: vfk --all\n");
+  }
+  if (skipped > 0) {
+    const names = selection.checks.filter((check) => !check.selected).map((check) => check.name);
+    text += style.dim(`skipped: ${names.join(", ")}\n`);
+  }
+  return text;
+}
+
+/** The permanent line printed when a check finishes. */
+export function renderCheckEnd(check: CheckResult, style: Style): string {
+  const detail = check.status === "passed" ? "" : ` ${describeProblem(check)}`;
+  return `${symbol(check.status, style)} ${check.name} ${style.dim(duration(check.durationMs))}${detail}\n`;
 }
 
 export function renderSummary(result: RunResult, style: Style): string {

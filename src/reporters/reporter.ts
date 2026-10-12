@@ -14,14 +14,20 @@ export interface StartInfo {
   selection: Selection;
   selected: string[];
   concurrency: number;
+  /** `dependsOn` of each selected check. */
+  dependsOn: Record<string, string[]>;
 }
 
 /** Receives run events. Only `onFinish` is required; streaming modes use the rest. */
 export interface Reporter {
   onStart?(info: StartInfo): void;
   onCheckStart?(name: string): void;
+  /** The latest non-empty line a running check printed, ANSI-stripped. Only sent when implemented. */
+  onCheckOutput?(name: string, line: string): void;
   onCheckEnd?(result: CheckResult): void;
   onFinish(result: RunResult): void;
+  /** Releases anything the reporter holds (such as the terminal), however the run ended. */
+  dispose?(): void;
 }
 
 /** Previews are shown for at most this many failed checks, to keep output bounded. */

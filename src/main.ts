@@ -8,8 +8,10 @@ import { showLogs } from "./logs.ts";
 import { plan, type PlanRequest } from "./planner.ts";
 import { killAllNow } from "./process.ts";
 import { agentReporter } from "./reporters/agent.ts";
-import { colors, humanReporter, plain } from "./reporters/human.ts";
+import { detectCi } from "./ci.ts";
+import { colors, humanReporter, plain, type Style } from "./reporters/human.ts";
 import { jsonReporter } from "./reporters/json.ts";
+import { liveReporter, type LiveTerminal } from "./reporters/live.ts";
 import { planJson, renderPlan } from "./reporters/plan.ts";
 import { quietReporter } from "./reporters/quiet.ts";
 import { OUTPUT_MODES, type Output, type OutputMode, type Reporter } from "./reporters/reporter.ts";
@@ -19,6 +21,8 @@ export interface Io extends Output {
   cwd: string;
   env: NodeJS.ProcessEnv;
   isTTY: boolean;
+  /** Stdout as a terminal, when it is one; enables the live status block in human mode. */
+  terminal?: LiveTerminal;
 }
 
 const COMMANDS = ["run", "plan", "logs", "init", "help"] as const;
@@ -47,6 +51,8 @@ Execution (run):
       --fail-fast                 Stop everything after the first failure
       --no-fail-fast              Run every selected check even after a failure
       --preview <lines>           Failure preview lines per check (default ${DEFAULT_PREVIEW_LINES}, 0 = off)
+      --no-live                   Print progress line by line instead of a live
+                                  status block (or set VERIFIKA_LIVE=0)
 
 Logs:
       --failed                    Print logs of every failed check
@@ -89,6 +95,7 @@ const OPTIONS = {
     "fail-fast": { type: "boolean" },
     "no-fail-fast": { type: "boolean" },
     preview: { type: "string" },
+    "no-live": { type: "boolean" },
   },
   plan: { ...SHARED, ...SELECTION },
   logs: {
@@ -192,20 +199,25 @@ export async function main(argv: string[], io: Io): Promise<number> {
         ? integerOption(values.preview, "--preview", 0)
         : DEFAULT_PREVIEW_LINES;
 
-    const result = await withInterruptHandling((signal) =>
-      runVerification({
-        config,
-        selection,
-        concurrency,
-        failFast,
-        previewLines,
-        signal,
-        reporter: reporterFor(mode, io),
-        version: version(),
-        env: io.env,
-      }),
-    );
-    return result.exitCode;
+    const reporter = reporterFor(mode, io, { live: values["no-live"] !== true });
+    try {
+      const result = await withInterruptHandling((signal) =>
+        runVerification({
+          config,
+          selection,
+          concurrency,
+          failFast,
+          previewLines,
+          signal,
+          reporter,
+          version: version(),
+          env: io.env,
+        }),
+      );
+      return result.exitCode;
+    } finally {
+      reporter.dispose?.();
+    }
   } catch (error) {
     if (error instanceof VerifikaError) {
       reportError(error, mode, io);
@@ -288,14 +300,21 @@ function guessMode(argv: string[], io: Io): OutputMode {
       : "agent";
 }
 
-function reporterFor(mode: OutputMode, io: Io): Reporter {
+function reporterFor(mode: OutputMode, io: Io, options: { live: boolean }): Reporter {
   switch (mode) {
     case "human": {
-      const color =
-        io.isTTY && !io.env.NO_COLOR
-          ? true
-          : Boolean(io.env.FORCE_COLOR && io.env.FORCE_COLOR !== "0");
-      return humanReporter(io, color ? colors : plain, { heartbeat: io.isTTY });
+      const style = humanStyle(io);
+      // The live block redraws in place, so it needs a real, capable terminal that
+      // nobody is logging; everywhere else the line reporter is the fallback.
+      const live =
+        options.live &&
+        io.terminal !== undefined &&
+        io.isTTY &&
+        !detectCi(io.env).ci &&
+        io.env.TERM !== "dumb" &&
+        !isOff(io.env.VERIFIKA_LIVE);
+      if (live && io.terminal) return liveReporter(io.terminal, style);
+      return humanReporter(io, style, { heartbeat: io.isTTY });
     }
     case "agent":
       return agentReporter(io);
@@ -304,6 +323,17 @@ function reporterFor(mode: OutputMode, io: Io): Reporter {
     case "quiet":
       return quietReporter(io);
   }
+}
+
+/** Colour on a terminal unless NO_COLOR is set; FORCE_COLOR enables it elsewhere. */
+function humanStyle(io: Io): Style {
+  const color =
+    io.isTTY && !io.env.NO_COLOR ? true : Boolean(io.env.FORCE_COLOR && io.env.FORCE_COLOR !== "0");
+  return color ? colors : plain;
+}
+
+function isOff(value: string | undefined): boolean {
+  return value !== undefined && ["0", "false", "no", "off"].includes(value.trim().toLowerCase());
 }
 
 function reportError(error: VerifikaError, mode: OutputMode, io: Io): void {

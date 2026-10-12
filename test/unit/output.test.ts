@@ -229,7 +229,13 @@ describe("human output", () => {
         { name: "docs", selected: false, reason: "no matching changes", matchedFiles: [] },
       ],
     };
-    reporter.onStart?.({ runId: "r", selection, selected: ["lint"], concurrency: 2 });
+    reporter.onStart?.({
+      runId: "r",
+      selection,
+      selected: ["lint"],
+      concurrency: 2,
+      dependsOn: { lint: [] },
+    });
     reporter.onCheckStart?.("lint");
     reporter.onCheckEnd?.(check("lint"));
     reporter.onFinish(run([check("lint"), check("docs", { selected: false, status: "skipped" })]));

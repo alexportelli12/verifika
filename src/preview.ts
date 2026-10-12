@@ -181,3 +181,40 @@ function push(list: Entry[], entry: Entry, limit: number, rolling: boolean): voi
     list.push(entry);
   }
 }
+
+/**
+ * Follows a stream of output and reports its latest non-empty line, including a
+ * line still being written (progress bars redraw with `\r` and may never end
+ * one). Reports only changes, ANSI-stripped. Memory is bounded like OutputCapture.
+ */
+export class LastLine {
+  private readonly report: (line: string) => void;
+  private pending = "";
+  private last = "";
+
+  constructor(report: (line: string) => void) {
+    this.report = report;
+  }
+
+  write(text: string): void {
+    const buffer = this.pending + text;
+    const lines = buffer.split("\n");
+    const rest = lines.pop() ?? "";
+    this.pending = rest.length > MAX_PENDING_CHARS ? rest.slice(-MAX_PENDING_CHARS) : rest;
+    for (const candidate of [rest, ...lines.reverse()]) {
+      const content = candidate.endsWith("\r") ? candidate.slice(0, -1) : candidate;
+      // Control characters (BEL, SO/SI, backspace) would act on the terminal at every redraw.
+      const line = stripAnsi(content.slice(content.lastIndexOf("\r") + 1))
+        .replace(/\t/g, " ")
+        // eslint-disable-next-line no-control-regex
+        .replace(/[\u0000-\u001f\u007f]/g, "")
+        .trim();
+      if (line === "") continue;
+      if (line !== this.last) {
+        this.last = line;
+        this.report(line);
+      }
+      return;
+    }
+  }
+}

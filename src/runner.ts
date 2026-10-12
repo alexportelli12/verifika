@@ -1,6 +1,7 @@
 import { constants } from "node:os";
 import path from "node:path";
 import { formatSeconds } from "./format.ts";
+import { LastLine } from "./preview.ts";
 import { execCheck, type ExecOutcome } from "./process.ts";
 import type { Reporter } from "./reporters/reporter.ts";
 import { createRun, logPath, pruneRuns, readLatest, releaseRun, writeRunResult } from "./runs.ts";
@@ -76,6 +77,7 @@ export async function runVerification(options: RunOptions): Promise<RunResult> {
     selection,
     selected: selected.map((check) => check.name),
     concurrency: options.concurrency,
+    dependsOn: Object.fromEntries(selected.map((check) => [check.name, check.dependsOn])),
   });
 
   const env = { ...(options.env ?? process.env), VERIFIKA: "1", VERIFIKA_RUN_ID: runId };
@@ -87,6 +89,11 @@ export async function runVerification(options: RunOptions): Promise<RunResult> {
       const check = byName.get(task.name) as CheckConfig;
       reporter.onCheckStart?.(check.name);
       const log = logPath(runId, check.name);
+      const onCheckOutput = reporter.onCheckOutput?.bind(reporter);
+      const followers = onCheckOutput && {
+        stdout: new LastLine((line) => onCheckOutput(check.name, line)),
+        stderr: new LastLine((line) => onCheckOutput(check.name, line)),
+      };
       const outcome = await execCheck({
         command: check.command,
         cwd: root,
@@ -95,6 +102,7 @@ export async function runVerification(options: RunOptions): Promise<RunResult> {
         logFile: path.join(root, log),
         previewLines: options.previewLines,
         signal,
+        ...(followers ? { onOutput: (stream, text) => followers[stream].write(text) } : {}),
       });
       const checkResult = completedResult(
         results.get(check.name) as CheckResult,

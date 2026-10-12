@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { ExitCode } from "./errors.ts";
 import { main } from "./main.ts";
+import { systemTerminal } from "./reporters/live.ts";
 
 const write = (stream: NodeJS.WriteStream) => (text: string) => {
   stream.write(text);
@@ -19,6 +20,9 @@ main(process.argv.slice(2), {
   isTTY: Boolean(process.stdout.isTTY),
   out: write(process.stdout),
   err: write(process.stderr),
+  ...(process.stdout.isTTY
+    ? { terminal: systemTerminal(write(process.stdout), process.stdout) }
+    : {}),
 }).then(
   (code) => {
     process.exitCode = code;
