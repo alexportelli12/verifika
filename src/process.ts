@@ -248,17 +248,23 @@ function hasLiveMember(pgid: number): boolean {
   } catch {
     return true;
   }
+  let members = 0;
   for (const pid of pids) {
     try {
       const stat = readFileSync(`/proc/${pid}/stat`, "utf8");
       // Format: pid (comm) state ppid pgrp ...; comm may itself contain spaces or ")".
       const [state, , pgrp] = stat.slice(stat.lastIndexOf(")") + 2).split(" ");
-      if (Number(pgrp) === pgid && state !== "Z") return true;
+      if (Number(pgrp) !== pgid) continue;
+      if (state !== "Z") return true;
+      members++;
     } catch {
       // The process exited while scanning.
     }
   }
-  return false;
+  // Only conclude "all zombies" from positive evidence. If /proc shows no member
+  // even though kill() found the group (a /proc from another PID namespace, or a
+  // sandbox that hides processes), trust kill() and keep treating it as alive.
+  return members === 0;
 }
 
 function signalGroup(pid: number, signal: NodeJS.Signals): void {

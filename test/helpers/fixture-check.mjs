@@ -69,6 +69,20 @@ switch (action) {
     writeFileSync(args[0], String(process.pid));
     setInterval(() => {}, 1000);
     break;
+  case "trap-term": {
+    // trap-term <marker> <ready>: background leftover that records SIGTERM in <marker>.
+    process.on("SIGTERM", () => {
+      writeFileSync(args[0], "terminated");
+      process.exit(0);
+    });
+    writeFileSync(args[1], "ready");
+    setInterval(() => {}, 1000);
+    break;
+  }
+  case "wait-for":
+    // wait-for <file>: exits once <file> exists.
+    while (!existsSync(args[0])) await sleep(20);
+    break;
   case "big": {
     // big <megabytes>: floods stdout, then fails.
     const line = `${"x".repeat(99)}\n`;
