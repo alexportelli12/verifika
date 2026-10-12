@@ -2,7 +2,7 @@
 
 All notable changes to this project are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses [Semantic Versioning](https://semver.org/). The CLI flags, exit codes, configuration format (`version: 1`) and JSON output (`schemaVersion: 1`) are the public API.
 
-## [Unreleased]
+## [0.0.2] - 2026-10-12
 
 ### Changed
 
@@ -37,4 +37,5 @@ First public release.
 - A process that deliberately detaches from the check (on Linux and macOS: leaves the process group, for example via `setsid`; on Windows: breaks away from the job with an exited intermediate parent) is not tracked unless it keeps the check's output open, in which case the check is reported as `error`.
 - On Windows, confirming cleanup queries the process table with PowerShell after each check, which costs roughly 0.5–3 s per check.
 
+[0.0.2]: https://github.com/alexportelli12/verifika/releases/tag/v0.0.2
 [0.0.1]: https://github.com/alexportelli12/verifika/releases/tag/v0.0.1
