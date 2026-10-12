@@ -1,5 +1,5 @@
 // Validates skills/verifika/SKILL.md: Agent Skills frontmatter rules, and that
-// every `verifika ...` command the skill teaches is accepted by the real CLI.
+// every `vfk ...` (or `verifika ...`) command the skill teaches is accepted by the real CLI.
 // Each command is executed against a disposable fixture repository; a usage
 // error (exit 2) or an internal error means the skill documents something the
 // CLI does not support.
@@ -50,11 +50,12 @@ if (lines > 500) problems.push(`body has ${lines} lines; keep skills under 500 l
 const commands = new Set();
 for (const block of body.matchAll(/```[a-z]*\n([\s\S]*?)```/g)) {
   for (const line of block[1].split("\n")) {
-    const command = /^\s*(?:\$\s*)?(verifika(?:\s.*)?)$/.exec(line.replace(/\s+#.*$/, ""));
+    const command = /^\s*(?:\$\s*)?((?:vfk|verifika)(?:\s.*)?)$/.exec(line.replace(/\s+#.*$/, ""));
     if (command) commands.add(command[1].trim());
   }
 }
-for (const inline of body.matchAll(/`(verifika(?: [^`]*)?)`/g)) commands.add(inline[1].trim());
+for (const inline of body.matchAll(/`((?:vfk|verifika)(?: [^`]*)?)`/g))
+  commands.add(inline[1].trim());
 if (commands.size < 8)
   problems.push(`expected the skill to demonstrate the CLI; found only ${commands.size} commands`);
 
@@ -63,7 +64,7 @@ try {
   setUpFixture(fixture);
   for (const command of [...commands].sort()) {
     const args = command
-      .replace(/^verifika\s*/, "")
+      .replace(/^(?:vfk|verifika)\s*/, "")
       .split(/\s+/)
       .filter(Boolean)
       .map((arg) => arg.replace(/^<[^>]+>$/, "lint"));
@@ -130,7 +131,7 @@ function setUpFixture(root) {
     "config",
   );
   git("update-ref", "refs/remotes/origin/main", "HEAD");
-  // A recorded run, so `verifika logs ...` commands have something to read.
+  // A recorded run, so `vfk logs ...` commands have something to read.
   const run = spawnSync(process.execPath, [cli, "--all"], {
     cwd: root,
     encoding: "utf8",

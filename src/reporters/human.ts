@@ -58,7 +58,7 @@ export function humanReporter(
       const skipped = selection.checks.length - selected.length;
       output.out(`${style.bold("verifika")} ${selectionLabel(selection, skipped)}\n`);
       if (selected.length === 0) {
-        output.out(style.dim("Nothing to verify for these changes. Full run: verifika --all\n"));
+        output.out(style.dim("Nothing to verify for these changes. Full run: vfk --all\n"));
         return;
       }
       if (skipped > 0) {

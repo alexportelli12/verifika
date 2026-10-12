@@ -1,6 +1,6 @@
 # Contributing
 
-Thanks for helping. Bug reports with a minimal reproduction (config, commands, output of `verifika plan --mode json`) are the most useful contribution.
+Thanks for helping. Bug reports with a minimal reproduction (config, commands, output of `vfk plan --mode json`) are the most useful contribution.
 
 ## Development
 

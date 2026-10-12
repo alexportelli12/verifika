@@ -47,7 +47,7 @@ cli.ts ─ main.ts ── config.ts ──► VerifikaConfig
 
 **CI mode only strengthens.** Environment variables can switch CI mode on but never off; narrowing a CI run requires an explicit command-line flag.
 
-**Run records first.** `run.json` (status `running`) is written, and the run becomes the latest run directory, before any check starts. If Verifika is killed outright, `verifika logs` shows that unfinished run rather than a misleading earlier one.
+**Run records first.** `run.json` (status `running`) is written, and the run becomes the latest run directory, before any check starts. If Verifika is killed outright, `vfk logs` shows that unfinished run rather than a misleading earlier one.
 
 **No caching.** v1 does not skip checks because "nothing relevant changed since the last pass". Cache correctness depends on inputs Verifika cannot see (environment, tool versions, network), and a wrong cache hit reports success for unverified code. Selective runs already avoid most unnecessary work, explicitly and visibly.
 

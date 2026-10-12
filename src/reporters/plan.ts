@@ -19,7 +19,7 @@ export function renderPlan(selection: Selection, maxFiles: number): string {
     for (const file of files.slice(0, maxFiles))
       lines.push(`  ${STATUS_LETTER[file.status]} ${file.path}`);
     if (files.length > maxFiles)
-      lines.push(`  … ${files.length - maxFiles} more (verifika plan --mode json lists all)`);
+      lines.push(`  … ${files.length - maxFiles} more (vfk plan --mode json lists all)`);
   }
   lines.push("Checks:");
   const width = Math.max(...selection.checks.map((check) => check.name.length));

@@ -1,15 +1,15 @@
 # CLI reference
 
 ```text
-verifika [run] [options]        Verify (selective locally, full in CI)
-verifika plan [options]         Show which checks would run and why
-verifika logs [check...]        Show logs from the latest run
-verifika init [--force]         Create verifika.config.json from package.json scripts
+vfk [run] [options]        Verify (selective locally, full in CI)
+vfk plan [options]         Show which checks would run and why
+vfk logs [check...]        Show logs from the latest run
+vfk init [--force]         Create verifika.config.json from package.json scripts
 ```
 
-The command, if any, comes first. `verifika` with no command is `verifika run`.
+The command, if any, comes first. `vfk` with no command is `vfk run`.
 
-`vfk` is installed alongside `verifika` as a shorthand; it is the same executable and accepts everything below.
+`vfk` is short for `verifika`: the package installs both commands, and they are identical. These docs use `vfk`.
 
 ## Selection (`run`, `plan`)
 
@@ -35,15 +35,15 @@ See [change detection semantics](configuration.md#change-detection-semantics).
 
 ## Logs (`logs`)
 
-| Usage                         | Effect                                                                          |
-| ----------------------------- | ------------------------------------------------------------------------------- |
-| `verifika logs`               | Summary of the latest run: status, durations, log paths.                        |
-| `verifika logs <check> [...]` | Print the full log of each named check.                                         |
-| `verifika logs --failed`      | Print the logs of every failed, timed-out or errored check, each with a header. |
-| `--tail <lines>`              | Print only the last lines of each log.                                          |
-| `--run <id>`                  | Read that run instead of the latest.                                            |
+| Usage                    | Effect                                                                          |
+| ------------------------ | ------------------------------------------------------------------------------- |
+| `vfk logs`               | Summary of the latest run: status, durations, log paths.                        |
+| `vfk logs <check> [...]` | Print the full log of each named check.                                         |
+| `vfk logs --failed`      | Print the logs of every failed, timed-out or errored check, each with a header. |
+| `--tail <lines>`         | Print only the last lines of each log.                                          |
+| `--run <id>`             | Read that run instead of the latest.                                            |
 
-Logs are stored exactly as the command printed them. When `verifika logs` writes to a pipe or file (as it does for agents), it strips terminal colour codes that some tools emit even when not attached to a terminal; on an interactive terminal they are kept.
+Logs are stored exactly as the command printed them. When `vfk logs` writes to a pipe or file (as it does for agents), it strips terminal colour codes that some tools emit even when not attached to a terminal; on an interactive terminal they are kept.
 
 ## Output (`--mode`)
 
@@ -133,11 +133,11 @@ For `run` and `plan`, `--mode json` prints exactly one JSON document to stdout, 
 | `summary.failed`        | selected checks that failed, timed out or could not start                                                                                                             |
 | `summary.notRun`        | selected checks that were blocked, cancelled or interrupted                                                                                                           |
 | `checks[].log`          | path relative to `root`, or `null` when the check never started                                                                                                       |
-| `latest`                | `false` when another run started in the same directory after this one; `verifika logs` without `--run` then shows that other run                                      |
+| `latest`                | `false` when another run started in the same directory after this one; `vfk logs` without `--run` then shows that other run                                           |
 
 Usage and configuration errors in JSON mode print `{"schemaVersion": 1, "status": "error", "exitCode": 2, "error": {"message": "...", "hint": "..."}}`.
 
-`verifika plan --mode json` prints `{"schemaVersion": 1, "kind": "plan", "root", "selection", "checks": [{"name", "selected", "reason", "matchedFiles", "command", "dependsOn"}]}`.
+`vfk plan --mode json` prints `{"schemaVersion": 1, "kind": "plan", "root", "selection", "checks": [{"name", "selected", "reason", "matchedFiles", "command", "dependsOn"}]}`.
 
 ## Exit codes
 

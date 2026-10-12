@@ -261,7 +261,7 @@ describe("loading", () => {
     } catch (error) {
       if (!(error instanceof VerifikaError)) throw error;
       expect(error.message).toContain("no verifika.config.json found");
-      expect(error.hint).toContain("verifika init");
+      expect(error.hint).toContain("vfk init");
     }
   });
 

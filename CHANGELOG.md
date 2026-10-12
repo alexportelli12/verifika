@@ -2,6 +2,16 @@
 
 All notable changes to this project are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses [Semantic Versioning](https://semver.org/). The CLI flags, exit codes, configuration format (`version: 1`) and JSON output (`schemaVersion: 1`) are the public API.
 
+## [Unreleased]
+
+### Changed
+
+- `vfk` is now the advertised command: `--help`, run hints (`Run: vfk logs <check>`), error hints, the README, the docs and the agent skill use it. `verifika` keeps working and is identical.
+
+### Added
+
+- README: a copy-paste prompt that has a coding agent install Verifika, write and validate a config, and install the skill.
+
 ## [0.0.1] - 2026-10-12
 
 First public release.

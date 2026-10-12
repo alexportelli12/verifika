@@ -27,7 +27,7 @@ export function renderAgent(result: RunResult): string {
     `${verdict(result)} ${summary.passed}/${summary.selected} (${duration(result.durationMs)}) ${selectionLabel(result.selection, summary.skipped)}`,
   ];
   if (summary.selected === 0)
-    lines.push("Nothing to verify for these changes. Full run: verifika --all");
+    lines.push("Nothing to verify for these changes. Full run: vfk --all");
 
   let previewed = 0;
   for (const check of problems(result)) {

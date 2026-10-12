@@ -81,7 +81,7 @@ describe("agent output", () => {
         "FAIL 3/4 (3.2s) full run (--all)",
         "typecheck: exit 2",
         "  src/a.ts(3,7): error TS2322: Type 'string' is not assignable to type 'number'.",
-        "Run: verifika logs typecheck",
+        "Run: vfk logs typecheck",
         "",
       ].join("\n"),
     );
@@ -103,7 +103,7 @@ describe("agent output", () => {
     expect(output).toContain("FAIL 0/3");
     expect(output).toContain("build: timed out after 2.0s\n");
     expect(output).toContain("e2e: dependency build did not pass\n");
-    expect(output).toContain("Run: verifika logs --failed\n");
+    expect(output).toContain("Run: vfk logs --failed\n");
   });
 
   it("previews at most three failed checks", () => {
@@ -129,7 +129,7 @@ describe("agent output", () => {
     );
     expect(output).toBe(
       "PASS 0/0 (0.0s) selective: no files changed since HEAD (abc1234); 1 skipped\n" +
-        "Nothing to verify for these changes. Full run: verifika --all\n",
+        "Nothing to verify for these changes. Full run: vfk --all\n",
     );
   });
 
@@ -142,7 +142,7 @@ describe("agent output", () => {
 
   it("names the run in the logs hint when a later run became the latest", () => {
     const output = renderAgent(run([failure], { latest: false }));
-    expect(output).toContain("Run: verifika logs typecheck --run 20261012-000000-000-abcdef\n");
+    expect(output).toContain("Run: vfk logs typecheck --run 20261012-000000-000-abcdef\n");
   });
 
   it("reports a check whose processes could not be cleaned up as an error", () => {
@@ -191,7 +191,7 @@ describe("quiet output", () => {
     const { out, err, output } = capture();
     quietReporter(output).onFinish(run([check("lint"), failure]));
     expect(out).toEqual([]);
-    expect(err).toEqual(["verifika: FAIL typecheck (exit 2). Run: verifika logs typecheck\n"]);
+    expect(err).toEqual(["verifika: FAIL typecheck (exit 2). Run: vfk logs typecheck\n"]);
   });
 });
 
@@ -239,7 +239,7 @@ describe("human output", () => {
     expect(summary).toContain("✗ typecheck: exit 2");
     expect(summary).toContain("    src/a.ts(3,7): error TS2322");
     expect(summary).toContain("✗ verification failed: 1 of 2 checks passed (4.3s)");
-    expect(summary).toContain("Logs: verifika logs typecheck");
+    expect(summary).toContain("Logs: vfk logs typecheck");
   });
 });
 
@@ -269,7 +269,7 @@ describe("plan output", () => {
         "Changed files (3):",
         "  A a.ts",
         "  D b.ts",
-        "  … 1 more (verifika plan --mode json lists all)",
+        "  … 1 more (vfk plan --mode json lists all)",
         "Checks:",
         "  run   lint        matched a.ts (+1 more)",
         "  skip  unit-tests  no matching changes",
