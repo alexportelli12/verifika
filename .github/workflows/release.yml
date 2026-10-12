@@ -45,10 +45,11 @@ jobs:
           fi
           echo "VERSION=$version" >> "$GITHUB_ENV"
 
-      - name: Check npm supports trusted publishing
+      - name: Check npm supports trusted and staged publishing
         run: |
-          if [ "$(printf '%s\n' 11.5.1 "$(npm --version)" | sort -V | head -n 1)" != 11.5.1 ]; then
-            echo "npm $(npm --version) is too old for trusted publishing (needs 11.5.1+)" >&2
+          if [ "$(printf '%s\n' 11.5.1 "$(npm --version)" | sort -V | head -n 1)" != 11.5.1 ] \
+            || ! npm stage --help >/dev/null 2>&1; then
+            echo "npm $(npm --version) lacks trusted or staged publishing (npm stage)" >&2
             exit 1
           fi
 
@@ -58,15 +59,17 @@ jobs:
       - name: Pack
         run: npm pack --ignore-scripts
 
-      # Publishes the tarball that was just tested. A rerun (for example after the
-      # GitHub release step failed) skips versions already on npm; the registry
-      # also refuses to publish a version twice.
-      - name: Publish to npm
+      # Stages the tarball that was just tested. The trusted publisher may only stage,
+      # so the version goes public once a maintainer approves it with 2FA (on
+      # npmjs.com, or `npm stage approve <id>`). A rerun skips versions already
+      # published; a version that is staged but not yet approved cannot be staged
+      # again, so approve or reject it before re-running.
+      - name: Stage the npm release
         run: |
           if [ -n "$(npm view "verifika@$VERSION" version 2>/dev/null)" ]; then
-            echo "verifika@$VERSION is already on npm; skipping publish"
+            echo "verifika@$VERSION is already on npm; skipping"
           else
-            npm publish "verifika-$VERSION.tgz" --provenance --access public
+            npm stage publish "verifika-$VERSION.tgz" --provenance
           fi
 
       - name: Create GitHub release
@@ -87,7 +90,7 @@ jobs:
           npm install --save-dev verifika@${VERSION}
           \`\`\`
 
-          Then run \`npx vfk\` (short for \`npx verifika\`). The package is also attached below.
+          Then run \`npx vfk\` (short for \`npx verifika\`). The package is also attached below; npm serves it once the staged version is approved.
           NOTES
           if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
             gh release upload "$GITHUB_REF_NAME" "verifika-$VERSION.tgz" --clobber
