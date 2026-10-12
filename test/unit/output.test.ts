@@ -4,6 +4,7 @@ import { formatSeconds } from "../../src/format.ts";
 import { OutputCapture, stripAnsi } from "../../src/preview.ts";
 import { renderAgent } from "../../src/reporters/agent.ts";
 import {
+  colors,
   humanReporter,
   plain,
   renderStart,
@@ -420,6 +421,22 @@ describe("plan output", () => {
         "",
       ].join("\n"),
     );
+  });
+
+  it("colours run and skip in human mode", () => {
+    const selection: Selection = {
+      mode: "changed",
+      reason: "1 file changed since HEAD (abc1234)",
+      changes: null,
+      invalidatedBy: null,
+      checks: [
+        { name: "build", selected: true, reason: "required by test", matchedFiles: [] },
+        { name: "docs", selected: false, reason: "no matching changes", matchedFiles: [] },
+      ],
+    };
+    const lines = renderPlan(selection, 10, colors).split("\n");
+    expect(lines).toContain("  \u001b[32mrun \u001b[39m  build  required by test");
+    expect(lines).toContain("\u001b[2m  skip  docs   no matching changes\u001b[22m");
   });
 });
 

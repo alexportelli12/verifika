@@ -60,6 +60,8 @@ export interface CheckDecision {
   reason: string;
   /** Changed files that matched this check's paths (bounded). */
   matchedFiles: string[];
+  /** Set only when the check was selected solely as a dependency: the selected checks that need it. */
+  requiredBy?: string[];
 }
 
 export type CheckStatus =

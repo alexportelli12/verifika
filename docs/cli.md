@@ -165,7 +165,9 @@ For `run` and `plan`, `--mode json` prints exactly one JSON document to stdout, 
 
 Usage and configuration errors in JSON mode print `{"schemaVersion": 1, "status": "error", "exitCode": 2, "error": {"message": "...", "hint": "..."}}`.
 
-`vfk plan --mode json` prints `{"schemaVersion": 1, "kind": "plan", "root", "selection", "checks": [{"name", "selected", "reason", "matchedFiles", "command", "dependsOn"}]}`.
+`vfk plan --mode json` prints `{"schemaVersion": 1, "kind": "plan", "root", "selection", "checks": [{"name", "selected", "reason", "matchedFiles", "command", "dependsOn", "requiredBy"?}]}`. `requiredBy` (added in 0.0.3) is present only on a check selected solely because other selected checks depend on it, and lists those checks in config order; its `reason` reads `required by test, pack`.
+
+In human mode, `vfk plan` colours `run` green and dims skipped checks, following the same `NO_COLOR` / `FORCE_COLOR` rules as `run`.
 
 ## Exit codes
 

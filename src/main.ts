@@ -183,7 +183,8 @@ export async function main(argv: string[], io: Io): Promise<number> {
 
     if (command === "plan") {
       if (mode === "json") io.out(planJson(selection, config));
-      else if (mode !== "quiet") io.out(renderPlan(selection, mode === "human" ? 50 : 20));
+      else if (mode === "human") io.out(renderPlan(selection, 50, humanStyle(io)));
+      else if (mode === "agent") io.out(renderPlan(selection, 20));
       return ExitCode.Passed;
     }
 

@@ -178,26 +178,38 @@ function decideByPaths(check: CheckConfig, files: string[]): CheckDecision | nul
   };
 }
 
-/** Adds dependencies of selected checks, then emits decisions in config order. */
+/**
+ * Adds dependencies of selected checks, recording every check that requires
+ * each one, then emits decisions in config order.
+ */
 function finalize(
   config: VerifikaConfig,
   decisions: Map<string, CheckDecision>,
   skipReason: string,
 ): CheckDecision[] {
   const byName = new Map(config.checks.map((check) => [check.name, check]));
+  const requiredBy = new Map<string, Set<string>>();
   const pending = [...decisions.keys()];
   while (pending.length > 0) {
     const name = pending.shift() as string;
     for (const dependency of byName.get(name)?.dependsOn ?? []) {
+      // Selected on its own merits: its own reason says why.
+      if (decisions.has(dependency) && !requiredBy.has(dependency)) continue;
+      requiredBy.set(dependency, (requiredBy.get(dependency) ?? new Set()).add(name));
       if (decisions.has(dependency)) continue;
-      decisions.set(dependency, {
-        name: dependency,
-        selected: true,
-        reason: `required by ${name}`,
-        matchedFiles: [],
-      });
+      decisions.set(dependency, { name: dependency, selected: true, reason: "", matchedFiles: [] });
       pending.push(dependency);
     }
+  }
+  for (const [dependency, dependents] of requiredBy) {
+    const names = config.checks.map((check) => check.name).filter((name) => dependents.has(name));
+    decisions.set(dependency, {
+      name: dependency,
+      selected: true,
+      reason: `required by ${names.join(", ")}`,
+      matchedFiles: [],
+      requiredBy: names,
+    });
   }
   return config.checks.map(
     (check) =>
