@@ -1,8 +1,18 @@
+import { existsSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { readTail } from "../../src/logs.ts";
 import { descendantsOf, execCheck } from "../../src/process.ts";
-import { createRunId, logPath } from "../../src/runs.ts";
+import {
+  createRun,
+  createRunId,
+  logPath,
+  pruneRuns,
+  readLatest,
+  readRun,
+  releaseRun,
+} from "../../src/runs.ts";
+import type { RunResult } from "../../src/types.ts";
 import { tempDir, writeFiles } from "../helpers/repo.ts";
 
 describe("run ids", () => {
@@ -124,5 +134,50 @@ describe("descendantsOf", () => {
   it("terminates on parent id cycles and never targets the root id itself", () => {
     const table = [entry(11, 10, 1500), entry(10, 11, 1600)];
     expect(pids(table, 10, 1000)).toEqual([11]);
+  });
+});
+
+describe("latest run and retention under concurrency", () => {
+  const stub = (runId: string) => ({ runId, status: "passed" }) as unknown as RunResult;
+
+  /** A finished run directory with a chosen id, as another process would leave it. */
+  function finishedRun(root: string, runId: string): void {
+    writeFiles(root, { [`.verifika/runs/${runId}/run.json`]: JSON.stringify(stub(runId)) });
+  }
+
+  it("names the newest run even when run directories appear out of order", async () => {
+    const root = tempDir();
+    // A newer run lands first, then an older one created earlier by a slower process.
+    finishedRun(root, "20261012-120000-500-bbbbbb");
+    finishedRun(root, "20261012-120000-100-aaaaaa");
+    expect(await readLatest(root)).toBe("20261012-120000-500-bbbbbb");
+    expect((await readRun(root)).runId).toBe("20261012-120000-500-bbbbbb");
+  });
+
+  it("stays consistent when many runs are created concurrently", async () => {
+    const root = tempDir();
+    const ids = await Promise.all(Array.from({ length: 20 }, () => createRun(root, stub)));
+    expect(new Set(ids).size).toBe(20);
+    expect(await readLatest(root)).toBe([...ids].sort().at(-1));
+    await Promise.all(ids.map((id) => releaseRun(root, id)));
+    await pruneRuns(root, 3, ids[0] as string);
+    expect(await readLatest(root)).toBe([...ids].sort().at(-1));
+    expect((await readRun(root)).runId).toBe(await readLatest(root));
+  });
+
+  it("never prunes the latest run while an older run is still finishing", async () => {
+    const root = tempDir();
+    finishedRun(root, "20261012-120000-000-aaaaaa");
+    finishedRun(root, "20261012-120000-100-bbbbbb");
+    finishedRun(root, "20261012-120000-200-cccccc"); // newest, finished
+    // An older, overlapping run applies retention with keepRuns: 1.
+    await pruneRuns(root, 1, "20261012-120000-100-bbbbbb");
+    expect(await readLatest(root)).toBe("20261012-120000-200-cccccc");
+    expect((await readRun(root)).runId).toBe("20261012-120000-200-cccccc");
+    expect(existsSync(path.join(root, ".verifika/runs/20261012-120000-000-aaaaaa"))).toBe(false);
+  });
+
+  it("has no latest run before the first one", async () => {
+    expect(await readLatest(tempDir())).toBeNull();
   });
 });

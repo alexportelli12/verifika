@@ -616,6 +616,32 @@ describe("verifika logs", () => {
     expect(readdirSync(path.join(root, ".verifika", "runs"))).toHaveLength(1);
   });
 
+  it("keeps latest and retention consistent across racing invocations", async () => {
+    const root = project({ lint: pass("lint") }, { defaults: { keepRuns: 2 } });
+    const results = await Promise.all(
+      Array.from({ length: 6 }, () => runCli(root, ["--all", "--mode", "json"])),
+    );
+    const ids = results.map((result) => (JSON.parse(result.stdout) as RunResult).runId);
+    expect(results.every((result) => result.code === 0)).toBe(true);
+    // `latest` means "no newer run had started when this one finished": the newest run
+    // always says so, and every run that says otherwise really was superseded.
+    const runs = results.map((result) => JSON.parse(result.stdout) as RunResult);
+    const newest = [...ids].sort().at(-1) as string;
+    expect(runs.find((run) => run.runId === newest)?.latest).toBe(true);
+    for (const run of runs.filter((candidate) => !candidate.latest)) {
+      expect(ids.some((id) => id > run.runId)).toBe(true);
+    }
+    const logs = await runCli(root, ["logs"]);
+    expect(logs.code).toBe(0);
+    expect(logs.stdout).toContain(`Run ${[...ids].sort().at(-1)}`);
+    // Runs that overlapped were protected from each other's retention; the next run
+    // prunes them back to keepRuns, keeping the newest.
+    const next = await runCli(root, ["--all", "--mode", "json"]);
+    const nextId = (JSON.parse(next.stdout) as RunResult).runId;
+    const remaining = readdirSync(path.join(root, ".verifika", "runs")).sort();
+    expect(remaining).toEqual([[...ids].sort().at(-1), nextId]);
+  });
+
   it("prunes runs abandoned by crashed processes and half-created run directories", async () => {
     const root = project({ lint: pass("lint") }, { defaults: { keepRuns: 1 } });
     const runs = path.join(root, ".verifika", "runs");

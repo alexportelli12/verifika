@@ -7,7 +7,6 @@ import type { RunResult } from "./types.ts";
 
 export const STATE_DIR = ".verifika";
 const RUNS_DIR = "runs";
-const LATEST_FILE = "latest";
 const RESULT_FILE = "run.json";
 /** Present while a run is in progress; names the process that owns it. */
 const OWNER_FILE = "owner.json";
@@ -105,21 +104,26 @@ export async function releaseRun(root: string, runId: string): Promise<void> {
   await rm(path.join(runDirectory(root, runId), OWNER_FILE), { force: true });
 }
 
-export async function markLatest(root: string, runId: string): Promise<void> {
-  await writeAtomic(path.join(root, STATE_DIR, LATEST_FILE), `${runId}\n`);
-}
-
+/**
+ * The most recently started run: the newest run directory. There is no shared
+ * pointer to keep in sync, so concurrent invocations cannot leave "latest" on an
+ * older run, and it can never name a run that retention has removed (retention
+ * always keeps the newest runs). Run directories appear atomically and their ids
+ * sort chronologically, so the answer only ever moves forward.
+ */
 export async function readLatest(root: string): Promise<string | null> {
   try {
-    const id = (await readFile(path.join(root, STATE_DIR, LATEST_FILE), "utf8")).trim();
-    return RUN_ID_PATTERN.test(id) ? id : null;
+    const runs = (await readdir(path.join(root, STATE_DIR, RUNS_DIR)))
+      .filter((name) => RUN_ID_PATTERN.test(name))
+      .sort();
+    return runs.at(-1) ?? null;
   } catch {
     return null;
   }
 }
 
 /**
- * Keeps the newest `keep` finished runs. Never deletes `current` or any run whose
+ * Keeps the newest `keep` runs, so the latest run is never removed. Never deletes `current` or any run whose
  * owning process is still alive, so concurrent invocations cannot remove each
  * other's logs. Also clears half-created directories abandoned by crashes.
  */
@@ -132,9 +136,10 @@ export async function pruneRuns(root: string, keep: number, current: string): Pr
     return;
   }
   const runs = names.filter((name) => RUN_ID_PATTERN.test(name)).sort();
+  // Only ever the oldest runs: the newest `keep` (which include the latest run) always stay.
   const candidates = runs
-    .filter((name) => name !== current)
-    .slice(0, Math.max(0, runs.length - keep));
+    .slice(0, Math.max(0, runs.length - keep))
+    .filter((name) => name !== current);
   const doomed: string[] = [];
   for (const name of candidates) {
     if (!(await isActiveRun(path.join(directory, name)))) doomed.push(name);

@@ -164,10 +164,10 @@ A run counts as CI when `CI` is set to anything other than `false`/`0`/empty, or
 
 ## Run storage
 
-Logs live in `.verifika/` under the project root. Verifika writes `.verifika/.gitignore` containing `*`, so the directory is ignored without touching your own `.gitignore`. Each run directory contains one `<check>.log` per executed check and `run.json`, the same document `--mode json` prints. `.verifika/latest` names the most recently started run.
+Logs live in `.verifika/` under the project root. Verifika writes `.verifika/.gitignore` containing `*`, so the directory is ignored without touching your own `.gitignore`. Each run directory contains one `<check>.log` per executed check and `run.json`, the same document `--mode json` prints. The latest run, which `verifika logs` shows by default, is simply the newest run directory: run ids sort by start time.
 
 Several Verifika processes can share a project directory safely (for example two agents, or an agent and an editor integration):
 
 - Each run directory is created atomically with its `run.json` and an owner record naming the process, which is removed when the run finishes.
 - Retention (`keepRuns`) never deletes a run whose owner is still running. Runs left behind by a process that crashed are pruned like finished runs, and so are half-created directories older than an hour.
-- `latest` points at the run that started last. If another run started while yours was in progress, your run's result has `"latest": false` and its logs hint includes `--run <id>`, so it always leads to your own logs.
+- "Latest" is derived from the run directories rather than stored in a shared file, so concurrent runs cannot leave it pointing at an older run, and retention (which always keeps the newest runs) can never remove it. If another run started while yours was in progress, your run's result has `"latest": false` and its logs hint includes `--run <id>`, so it always leads to your own logs.

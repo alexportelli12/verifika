@@ -3,15 +3,7 @@ import path from "node:path";
 import { formatSeconds } from "./format.ts";
 import { execCheck, type ExecOutcome } from "./process.ts";
 import type { Reporter } from "./reporters/reporter.ts";
-import {
-  createRun,
-  logPath,
-  markLatest,
-  pruneRuns,
-  readLatest,
-  releaseRun,
-  writeRunResult,
-} from "./runs.ts";
+import { createRun, logPath, pruneRuns, readLatest, releaseRun, writeRunResult } from "./runs.ts";
 import { schedule, type StopReason, type TaskOutcome } from "./scheduler.ts";
 import type {
   CheckConfig,
@@ -73,10 +65,9 @@ export async function runVerification(options: RunOptions): Promise<RunResult> {
   });
 
   // Record the run before anything executes, so `verifika logs` never shows a stale
-  // earlier run as "latest" if this one is killed.
+  // earlier run as "latest" if this one is killed: the newest run directory is latest.
   const runId = await createRun(root, resultFor);
   const result = resultFor(runId);
-  await markLatest(root, runId);
   await pruneRuns(root, config.keepRuns, runId);
 
   const selected = config.checks.filter((check) => results.get(check.name)?.selected);

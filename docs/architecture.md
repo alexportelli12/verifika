@@ -21,7 +21,7 @@ cli.ts ─ main.ts ── config.ts ──► VerifikaConfig
 | `scheduler.ts` | Dependency-aware, concurrency-limited scheduling. Pure: knows nothing about processes.                             |
 | `process.ts`   | Run one command: shell spawn, process groups, timeouts, abort, tree kill, streaming to the log file.               |
 | `preview.ts`   | Bounded failure excerpt from streamed output.                                                                      |
-| `runs.ts`      | Run ids, `.verifika/` layout, atomic `run.json` and `latest`, retention.                                           |
+| `runs.ts`      | Run ids, `.verifika/` layout, atomic run creation, latest run, retention.                                          |
 | `runner.ts`    | Glue: create the run, schedule checks, map outcomes to statuses, compute the exit code.                            |
 | `reporters/*`  | Presentation only.                                                                                                 |
 
@@ -41,13 +41,13 @@ cli.ts ─ main.ts ── config.ts ──► VerifikaConfig
 
 **Stable, explicit results.** Every selected check ends in exactly one status. Any status other than `passed` makes the run fail. The JSON document is versioned (`schemaVersion: 1`) and identical to the `run.json` written to disk, so tools can read either.
 
-**Concurrent invocations.** Run directories are created by renaming a fully prepared temporary directory, carry an owner record (pid and host) until they finish, and are only pruned once that owner is gone. Logs hints name the run explicitly when another run has since become `latest`.
+**Concurrent invocations.** Run directories are created by renaming a fully prepared temporary directory, carry an owner record (pid and host) until they finish, and are only pruned once that owner is gone. The latest run is the newest run directory, never a separately written pointer, so it cannot go backwards or name a pruned run. Logs hints name the run explicitly when another run has since become the latest.
 
 **Sequential by default.** Only the project knows which of its scripts share build outputs, so parallelism is opt-in through `defaults.concurrency` or `-j`.
 
 **CI mode only strengthens.** Environment variables can switch CI mode on but never off; narrowing a CI run requires an explicit command-line flag.
 
-**Run records first.** `run.json` (status `running`) and the `latest` pointer are written before any check starts. If Verifika is killed outright, `verifika logs` shows that unfinished run rather than a misleading earlier one.
+**Run records first.** `run.json` (status `running`) is written, and the run becomes the latest run directory, before any check starts. If Verifika is killed outright, `verifika logs` shows that unfinished run rather than a misleading earlier one.
 
 **No caching.** v1 does not skip checks because "nothing relevant changed since the last pass". Cache correctness depends on inputs Verifika cannot see (environment, tool versions, network), and a wrong cache hit reports success for unverified code. Selective runs already avoid most unnecessary work, explicitly and visibly.
 
