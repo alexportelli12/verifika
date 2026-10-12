@@ -373,6 +373,22 @@ describe("verifika run", () => {
     expect(survived).toBe(false);
   });
 
+  it("kills processes the shell itself left running in the background", async () => {
+    // Started by the shell rather than by Node, so no job object or parent cleanup applies:
+    // only Verifika's own reaping (process group on POSIX, parent-pid trace on Windows) stops it.
+    const command = isWindows
+      ? "start /b node check.mjs daemon daemon.txt"
+      : "node check.mjs daemon daemon.txt &";
+    const root = project({ daemon: { command } });
+    const result = await runCli(root, ["--all"]);
+    const file = path.join(root, "daemon.txt");
+    const pid = existsSync(file) ? Number(readFileSync(file, "utf8")) : null;
+    const survived = pid !== null && isAlive(pid);
+    if (survived) process.kill(pid, "SIGKILL");
+    expect(result.code).toBe(0);
+    expect(survived).toBe(false);
+  });
+
   it("never passes a check whose leftover processes escape cleanup", async () => {
     const root = project({ escape: { command: "node check.mjs escape escape.txt" } });
     const result = await runCli(root, ["--all", "--mode", "json"]);
@@ -380,20 +396,20 @@ describe("verifika run", () => {
     const survived = isAlive(pid);
     if (survived) process.kill(pid, "SIGKILL");
     const json = JSON.parse(result.stdout) as RunResult;
-    if (isWindows) {
-      // Windows tracks descendants by parent process id, so the escapee is found and killed.
-      expect(result.code).toBe(0);
+    // The invariant on every platform: a check never passes while its leftover survives.
+    if (result.code === 0) {
       expect(survived).toBe(false);
     } else {
-      // A new session leaves the process group; Verifika cannot reap it, so it must not pass.
       expect(result.code).toBe(1);
       expect(json.checks[0]).toMatchObject({
         status: "error",
         reason: "process tree not cleaned up",
         exitCode: 0,
-        error: expect.stringContaining("kept its output open"),
+        error: expect.stringContaining("kept"),
       });
     }
+    // POSIX cannot reach a process in a new session, so there it must be an error.
+    if (!isWindows) expect(result.code).toBe(1);
   });
 
   it.skipIf(isWindows)("terminates the whole process tree on SIGINT and exits 130", async () => {

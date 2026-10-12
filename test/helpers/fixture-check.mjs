@@ -64,6 +64,11 @@ switch (action) {
     child.unref();
     break;
   }
+  case "daemon":
+    // daemon <pidfile>: records its pid, then runs forever (started in the background by the shell).
+    writeFileSync(args[0], String(process.pid));
+    setInterval(() => {}, 1000);
+    break;
   case "big": {
     // big <megabytes>: floods stdout, then fails.
     const line = `${"x".repeat(99)}\n`;

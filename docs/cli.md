@@ -156,10 +156,10 @@ The first SIGINT, SIGTERM or SIGHUP stops scheduling, sends SIGTERM to every run
 When a check's main process exits, Verifika makes sure nothing it started is left running before recording the result:
 
 - On Linux and macOS each check runs in its own process group. Verifika sends the group SIGTERM, then SIGKILL, and waits until the group no longer exists. Processes that ignore SIGTERM are killed.
-- On Windows, where a tree cannot be walked once its root has exited, Verifika lists processes whose parent chain leads back to the check (created after it started) and terminates them with `taskkill /F`.
+- On Windows, Node already places the check in a job object that ends with it, and Verifika additionally lists processes whose parent chain leads back to the check (created after it started) and terminates them with `taskkill /F`. A process that broke away from the job and whose parent chain passes through an already-exited process cannot be traced.
 - A command that does not exit even after being killed is abandoned after a few seconds instead of hanging the run.
 
-If any of this cannot be confirmed, the check is reported as `error` with reason `process tree not cleaned up`, whatever its exit code, and the run fails. A leftover process could still be writing files or holding ports, so its result cannot count as a pass. One case is out of reach: on Linux and macOS, a process that deliberately leaves the process group (`setsid`, or Node's `detached`) and closes its output is a daemon by design and is not tracked; if it keeps the check's output open, the check is reported as `error`.
+If any of this cannot be confirmed, the check is reported as `error` with reason `process tree not cleaned up`, whatever its exit code, and the run fails. A leftover process could still be writing files or holding ports, so its result cannot count as a pass. What is out of reach is a process that deliberately detaches (`setsid` or Node's `detached` on Linux and macOS; breaking away from the job with a broken parent chain on Windows): if it closes its output it is a daemon by design and is not tracked; if it keeps the check's output open, the check is reported as `error`.
 
 ## Environment variables
 
