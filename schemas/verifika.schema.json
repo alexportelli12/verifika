@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://unpkg.com/verifika@1/schemas/verifika.schema.json",
+  "$id": "https://raw.githubusercontent.com/alexportelli12/verifika/main/schemas/verifika.schema.json",
   "title": "Verifika configuration",
   "description": "Configuration for verifika, the deterministic repository verification CLI. https://github.com/alexportelli12/verifika",
   "type": "object",

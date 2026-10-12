@@ -4,7 +4,8 @@ import path from "node:path";
 import { CONFIG_FILE } from "./config.ts";
 import { VerifikaError } from "./errors.ts";
 
-export const SCHEMA_URL = "https://unpkg.com/verifika@1/schemas/verifika.schema.json";
+export const SCHEMA_URL =
+  "https://raw.githubusercontent.com/alexportelli12/verifika/main/schemas/verifika.schema.json";
 const LOCAL_SCHEMA = "./node_modules/verifika/schemas/verifika.schema.json";
 
 /** Conventional script names, in order of preference, for each starter check. */

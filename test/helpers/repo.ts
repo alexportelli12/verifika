@@ -37,6 +37,9 @@ const EMPTY_GIT_CONFIG = path.join(
   "config",
 );
 writeFileSync(EMPTY_GIT_CONFIG, "");
+process.once("exit", () =>
+  rmSync(path.dirname(EMPTY_GIT_CONFIG), { recursive: true, force: true }),
+);
 
 export function git(cwd: string, ...args: string[]): string {
   return execFileSync("git", args, {

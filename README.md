@@ -1,7 +1,7 @@
 # Verifika
 
 [![CI](https://github.com/alexportelli12/verifika/actions/workflows/ci.yml/badge.svg)](https://github.com/alexportelli12/verifika/actions/workflows/ci.yml)
-[![npm](https://img.shields.io/npm/v/verifika)](https://www.npmjs.com/package/verifika)
+[![Release](https://img.shields.io/github/v/release/alexportelli12/verifika)](https://github.com/alexportelli12/verifika/releases/latest)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 Run the checks your changes need, concurrently, with minimal output.
@@ -32,11 +32,19 @@ _Verifika_ is Maltese for "verification".
 
 Requires Node.js 22.13 or newer.
 
+Verifika is distributed as a prebuilt package attached to each [GitHub release](https://github.com/alexportelli12/verifika/releases) (it is not on the npm registry yet). Install it as a dev dependency from the release URL:
+
 ```sh
-npm install --save-dev verifika
+npm install --save-dev https://github.com/alexportelli12/verifika/releases/download/v1.0.0/verifika-1.0.0.tgz
 ```
 
-Or run it without installing: `npx verifika`.
+npm records the URL in `package.json` and the lockfile, so everyone on the project gets the same build. Then run it with `npx verifika`.
+
+To try it without adding a dependency:
+
+```sh
+npx --package https://github.com/alexportelli12/verifika/releases/download/v1.0.0/verifika-1.0.0.tgz verifika --help
+```
 
 ## Quick start
 

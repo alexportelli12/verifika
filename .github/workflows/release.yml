@@ -5,15 +5,14 @@ on:
     tags: ["v*.*.*"]
 
 permissions:
-  contents: write # create the GitHub release
-  id-token: write # npm trusted publishing (OIDC) and provenance
+  contents: write # create the GitHub release and upload the package
 
 concurrency:
   group: release
   cancel-in-progress: false
 
 jobs:
-  publish:
+  release:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -35,13 +34,9 @@ jobs:
 
       - run: npm run verify -- --mode human
 
-      - name: Publish to npm
-        run: |
-          if npm view "verifika@$VERSION" version >/dev/null 2>&1; then
-            echo "verifika@$VERSION is already on npm; skipping publish."
-          else
-            npm publish --provenance --access public
-          fi
+      # The verify gate already built dist/ and smoke-tested an installed tarball.
+      - name: Pack
+        run: npm pack --ignore-scripts
 
       - name: Create GitHub release
         env:
@@ -53,8 +48,17 @@ jobs:
             found { print }
           ' CHANGELOG.md > release-notes.md
           test -s release-notes.md || echo "See CHANGELOG.md" > release-notes.md
+          cat >> release-notes.md <<NOTES
+
+          ## Install
+
+          \`\`\`sh
+          npm install --save-dev https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}/verifika-${VERSION}.tgz
+          \`\`\`
+          NOTES
           if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
-            echo "Release $GITHUB_REF_NAME already exists."
+            gh release upload "$GITHUB_REF_NAME" "verifika-$VERSION.tgz" --clobber
           else
-            gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --notes-file release-notes.md --verify-tag
+            gh release create "$GITHUB_REF_NAME" "verifika-$VERSION.tgz" \
+              --title "$GITHUB_REF_NAME" --notes-file release-notes.md --verify-tag
           fi

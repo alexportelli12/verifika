@@ -8,7 +8,7 @@ The format is plain JSON (no comments, no code execution). Add `$schema` for edi
 { "$schema": "./node_modules/verifika/schemas/verifika.schema.json" }
 ```
 
-When Verifika is not a local dependency, use `https://unpkg.com/verifika@1/schemas/verifika.schema.json`.
+When Verifika is not a local dependency, use `https://raw.githubusercontent.com/alexportelli12/verifika/main/schemas/verifika.schema.json`.
 
 ## Full example
 

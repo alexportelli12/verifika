@@ -39,4 +39,4 @@ npm run verify          # the full quality gate, run by Verifika itself
 2. Merge to `main` with CI green.
 3. Tag and push: `git tag v1.2.3 && git push origin v1.2.3`.
 
-The release workflow verifies the tag matches `package.json`, runs the full gate, publishes to npm through trusted publishing with provenance, and creates the GitHub release from the changelog.
+The release workflow verifies the tag matches `package.json`, runs the full gate, packs the package and creates the GitHub release from the changelog with `verifika-<version>.tgz` attached. Verifika is not published to the npm registry yet; `"private": true` in `package.json` prevents accidental publishing.

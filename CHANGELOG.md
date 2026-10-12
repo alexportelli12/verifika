@@ -17,5 +17,6 @@ First stable release.
 - `verifika init` to create a starter config from `package.json` scripts.
 - JSON schema for `verifika.config.json` with editor autocomplete.
 - Agent skill (`skills/verifika/SKILL.md`) for Claude Code, Codex, OpenCode and other agents.
+- Distributed as a prebuilt package tarball attached to the GitHub release (not yet on the npm registry).
 
 [1.0.0]: https://github.com/alexportelli12/verifika/releases/tag/v1.0.0
