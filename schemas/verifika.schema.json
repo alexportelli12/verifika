@@ -29,6 +29,7 @@
         "timeoutMs": {
           "type": "integer",
           "minimum": 1,
+          "maximum": 2147483647,
           "description": "Default per-check timeout in milliseconds. A check that exceeds it is killed and fails. Default: 600000 (10 minutes)."
         },
         "failFast": {
@@ -51,6 +52,7 @@
         "base": {
           "type": "string",
           "minLength": 1,
+          "pattern": "\\S",
           "description": "Git ref to compare against for selective runs. Files changed since merge-base(base, HEAD), plus uncommitted and untracked files, are considered changed. Default: \"HEAD\" (only uncommitted work)."
         },
         "invalidateAll": {
@@ -64,7 +66,10 @@
       "minProperties": 1,
       "description": "Checks keyed by name. Names may contain letters, digits, '.', '_' and '-'.",
       "propertyNames": {
-        "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$"
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$",
+        "not": {
+          "pattern": "^([Cc][Oo][Nn]|[Pp][Rr][Nn]|[Aa][Uu][Xx]|[Nn][Uu][Ll]|[Cc][Oo][Mm][0-9]|[Ll][Pp][Tt][0-9])(\\..*)?$"
+        }
       },
       "additionalProperties": {
         "$ref": "#/definitions/check"
@@ -113,6 +118,7 @@
         "timeoutMs": {
           "type": "integer",
           "minimum": 1,
+          "maximum": 2147483647,
           "description": "Timeout for this check in milliseconds, overriding defaults.timeoutMs."
         }
       },

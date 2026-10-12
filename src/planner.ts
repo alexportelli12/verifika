@@ -31,15 +31,27 @@ export async function plan(
   request: PlanRequest = {},
   detect: DetectChanges = detectChanges,
 ): Promise<Selection> {
-  const requested = [request.all, request.checks?.length, request.changed, request.changedSince];
+  const requested = [
+    request.all === true,
+    request.checks !== undefined,
+    request.changed === true,
+    request.changedSince !== undefined,
+  ];
   if (requested.filter(Boolean).length > 1) {
     throw new VerifikaError("use only one of --all, --check, --changed and --changed-since");
   }
 
-  if (request.checks?.length) return explicitSelection(config, request.checks);
+  if (request.checks !== undefined) {
+    if (request.checks.length === 0)
+      throw new VerifikaError("--check needs at least one check name");
+    return explicitSelection(config, request.checks);
+  }
+  if (request.changedSince !== undefined && request.changedSince.trim() === "") {
+    throw new VerifikaError("--changed-since needs a git ref, for example origin/main");
+  }
   if (request.all) return fullSelection(config, "--all", null);
 
-  const explicitSelective = Boolean(request.changed || request.changedSince);
+  const explicitSelective = request.changed === true || request.changedSince !== undefined;
   if (!explicitSelective) {
     const ci = detectCi(request.env ?? process.env);
     if (ci.ci) {

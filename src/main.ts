@@ -62,7 +62,7 @@ General:
   -v, --version                   Show the version
 
 Exit codes: 0 passed or nothing to verify, 1 verification failed,
-2 usage or configuration error, 130/143 interrupted.
+2 usage or configuration error, 128+signal interrupted (130 SIGINT, 143 SIGTERM).
 Docs: https://github.com/alexportelli12/verifika
 `;
 
@@ -152,12 +152,17 @@ export async function main(argv: string[], io: Io): Promise<number> {
 
     const request: PlanRequest = {
       all: Boolean(values.all),
-      checks: ((values.check as string[] | undefined) ?? []).flatMap((value) =>
-        value
-          .split(",")
-          .map((name) => name.trim())
-          .filter(Boolean),
-      ),
+      // An empty value (e.g. `--check "$UNSET"`) must fail, not widen into a default run.
+      ...(values.check !== undefined
+        ? {
+            checks: (values.check as string[]).flatMap((value) =>
+              value
+                .split(",")
+                .map((name) => name.trim())
+                .filter(Boolean),
+            ),
+          }
+        : {}),
       changed: Boolean(values.changed),
       env: io.env,
       ...(values["changed-since"] !== undefined
@@ -200,9 +205,20 @@ export async function main(argv: string[], io: Io): Promise<number> {
     );
     return result.exitCode;
   } catch (error) {
-    if (!(error instanceof VerifikaError)) throw error;
-    reportError(error, mode, io);
-    return ExitCode.Usage;
+    if (error instanceof VerifikaError) {
+      reportError(error, mode, io);
+      return ExitCode.Usage;
+    }
+    // Keep stdout parseable in JSON mode even for bugs; otherwise let cli.ts print the stack.
+    if (mode !== "json") throw error;
+    const message = error instanceof Error ? error.message : String(error);
+    io.err(
+      `verifika: internal error: ${error instanceof Error ? (error.stack ?? message) : message}\n`,
+    );
+    io.out(
+      `${JSON.stringify({ schemaVersion: 1, status: "error", exitCode: ExitCode.Internal, error: { message: `internal error: ${message}`, hint: "This is a bug; please report it." } }, null, 2)}\n`,
+    );
+    return ExitCode.Internal;
   }
 }
 

@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { ExitCode } from "./errors.ts";
 import { main } from "./main.ts";
 
 const write = (stream: NodeJS.WriteStream) => (text: string) => {
@@ -26,6 +27,6 @@ main(process.argv.slice(2), {
     process.stderr.write(
       `verifika: internal error: ${error instanceof Error ? (error.stack ?? error.message) : String(error)}\n`,
     );
-    process.exitCode = 70;
+    process.exitCode = ExitCode.Internal;
   },
 );

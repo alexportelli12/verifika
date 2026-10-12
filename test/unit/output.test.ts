@@ -23,6 +23,7 @@ function check(name: string, overrides: Partial<CheckResult> = {}): CheckResult 
     log: `.verifika/runs/r/${name}.log`,
     preview: [],
     error: null,
+    warning: null,
     ...overrides,
   };
 }
@@ -137,6 +138,14 @@ describe("agent output", () => {
       run([check("x", { status: "error", reason: "could not start", error: "spawn ENOENT" })]),
     );
     expect(output).toContain("x: could not start: spawn ENOENT");
+  });
+
+  it("surfaces warnings even when the run passed", () => {
+    const output = renderAgent(
+      run([check("serve", { warning: "a background process kept running" })]),
+    );
+    expect(output).toContain("PASS 1/1");
+    expect(output).toContain("serve: warning: a background process kept running\n");
   });
 
   it("labels interrupted runs", () => {

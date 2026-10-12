@@ -159,6 +159,7 @@ function initialResult(check: CheckConfig, selected: boolean, reason: string): C
     log: null,
     preview: [],
     error: null,
+    warning: null,
   };
 }
 
@@ -168,7 +169,13 @@ function completedResult(
   outcome: ExecOutcome,
   log: string,
 ): CheckResult {
-  const common = { ...base, durationMs: outcome.durationMs, log, preview: outcome.preview };
+  const common = {
+    ...base,
+    durationMs: outcome.durationMs,
+    log,
+    preview: outcome.preview,
+    warning: outcome.warning ?? null,
+  };
   switch (outcome.kind) {
     case "exited":
       if (outcome.exitCode === 0)

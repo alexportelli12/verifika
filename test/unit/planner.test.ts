@@ -110,6 +110,15 @@ describe("plan", () => {
     });
   });
 
+  it("rejects empty explicit selections instead of widening them", async () => {
+    await expect(plan(config, { checks: [], env: LOCAL }, changes())).rejects.toThrow(
+      "--check needs at least one check name",
+    );
+    await expect(plan(config, { changedSince: " ", env: LOCAL }, changes())).rejects.toThrow(
+      "--changed-since needs a git ref",
+    );
+  });
+
   it("rejects conflicting selection flags", async () => {
     await expect(plan(config, { all: true, changed: true })).rejects.toThrow(VerifikaError);
     await expect(plan(config, { checks: ["lint"], changedSince: "main" })).rejects.toThrow(

@@ -14,7 +14,7 @@ export interface ExecOptions {
   signal: AbortSignal;
 }
 
-export type ExecOutcome =
+export type ExecOutcome = (
   | {
       kind: "exited";
       exitCode: number | null;
@@ -24,7 +24,11 @@ export type ExecOutcome =
     }
   | { kind: "timed_out"; durationMs: number; preview: string[] }
   | { kind: "aborted"; reason: unknown; durationMs: number; preview: string[] }
-  | { kind: "spawn_error"; error: string; durationMs: number; preview: string[] };
+  | { kind: "spawn_error"; error: string; durationMs: number; preview: string[] }
+) & {
+  /** Set when a descendant process outlived the check and could not be reaped. */
+  warning?: string;
+};
 
 const isWindows = process.platform === "win32";
 /** Time a terminated process tree gets to exit before it is killed outright. */
@@ -120,10 +124,14 @@ export async function execCheck(options: ExecOptions): Promise<ExecOutcome> {
   clearTimeout(timer);
   options.signal.removeEventListener("abort", onAbort);
 
+  let warning: string | undefined;
   if (result.error === undefined) {
     // The shell has exited, but descendants may still hold the output pipes open.
     // Reap the rest of the process group so nothing outlives the check.
-    await drainAndReap(child);
+    if (!(await drainAndReap(child))) {
+      warning =
+        "a background process kept the output open after the command exited and may still be running";
+    }
   } else {
     child.stdout?.destroy();
     child.stderr?.destroy();
@@ -135,26 +143,41 @@ export async function execCheck(options: ExecOptions): Promise<ExecOutcome> {
 
   const preview = capture.preview();
   const durationMs = elapsed();
+  const extra = warning ? { warning } : {};
   if (result.error !== undefined)
     return { kind: "spawn_error", error: result.error, durationMs, preview };
-  if (timedOut) return { kind: "timed_out", durationMs, preview };
+  if (timedOut) return { kind: "timed_out", durationMs, preview, ...extra };
   if (abortReason !== undefined)
-    return { kind: "aborted", reason: abortReason, durationMs, preview };
-  return { kind: "exited", exitCode: result.code, signal: result.signal, durationMs, preview };
+    return { kind: "aborted", reason: abortReason, durationMs, preview, ...extra };
+  return {
+    kind: "exited",
+    exitCode: result.code,
+    signal: result.signal,
+    durationMs,
+    preview,
+    ...extra,
+  };
 }
 
-async function drainAndReap(child: ChildProcess): Promise<void> {
+/**
+ * Waits for the output pipes to close, terminating the rest of the check's
+ * process group on POSIX. Returns false when something outside the group (a
+ * `setsid` daemon, or any leftover descendant on Windows, where the tree can no
+ * longer be found once its root exited) still held the pipes.
+ */
+async function drainAndReap(child: ChildProcess): Promise<boolean> {
   const closed = new Promise<void>((resolve) => {
     if (child.stdout?.closed !== false && child.stderr?.closed !== false) resolve();
     else child.once("close", () => resolve());
   });
   if (!isWindows) signalGroup(child, "SIGTERM");
-  if (await settlesWithin(closed, PIPE_DRAIN_MS)) return;
+  if (await settlesWithin(closed, PIPE_DRAIN_MS)) return true;
   if (!isWindows) signalGroup(child, "SIGKILL");
-  if (await settlesWithin(closed, PIPE_DRAIN_MS)) return;
-  // Something outside our process group still holds the pipes; stop reading them.
+  if (await settlesWithin(closed, PIPE_DRAIN_MS)) return true;
+  // Something outside our reach still holds the pipes; stop reading them.
   child.stdout?.destroy();
   child.stderr?.destroy();
+  return false;
 }
 
 async function terminateTree(child: ChildProcess): Promise<void> {

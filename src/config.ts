@@ -8,6 +8,10 @@ export const CONFIG_FILE = "verifika.config.json";
 export const CHECK_NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
 
 const DEFAULT_TIMEOUT_MS = 600_000;
+/** Largest delay setTimeout accepts (about 24.8 days); larger values would fire immediately. */
+export const MAX_TIMEOUT_MS = 2_147_483_647;
+/** Device names Windows reserves in every directory; they cannot be log file names. */
+const RESERVED_NAMES = /^(con|prn|aux|nul|com[0-9]|lpt[0-9])(\..*)?$/i;
 const DEFAULT_KEEP_RUNS = 10;
 
 /** Half the available cores, between 1 and 4: checks such as tsc and test runners are multi-threaded themselves. */
@@ -70,6 +74,7 @@ export function parseConfig(raw: unknown, file: string): VerifikaConfig {
 
   if (!v.object(raw, "config")) throw configError(file, errors);
   v.keys(raw, "config", ["$schema", "version", "defaults", "changes", "checks"]);
+  v.string(raw.$schema, "$schema");
 
   if (raw.version !== 1) {
     errors.push(
@@ -87,7 +92,7 @@ export function parseConfig(raw: unknown, file: string): VerifikaConfig {
   if (v.object(defaults, "defaults")) {
     v.keys(defaults, "defaults", ["concurrency", "timeoutMs", "failFast", "keepRuns"]);
     concurrency = v.integer(defaults.concurrency, "defaults.concurrency", 1, 64) ?? concurrency;
-    timeoutMs = v.integer(defaults.timeoutMs, "defaults.timeoutMs", 1) ?? timeoutMs;
+    timeoutMs = v.integer(defaults.timeoutMs, "defaults.timeoutMs", 1, MAX_TIMEOUT_MS) ?? timeoutMs;
     failFast = v.boolean(defaults.failFast, "defaults.failFast") ?? failFast;
     keepRuns = v.integer(defaults.keepRuns, "defaults.keepRuns", 1, 1000) ?? keepRuns;
   }
@@ -116,6 +121,15 @@ export function parseConfig(raw: unknown, file: string): VerifikaConfig {
           `${at}: invalid name; use letters, digits, ".", "_" or "-", starting with a letter or digit`,
         );
       }
+      if (RESERVED_NAMES.test(name)) {
+        errors.push(`${at}: "${name}" is a reserved device name on Windows; choose another name`);
+      }
+      const clash = entries.find(
+        ([other]) => other !== name && other.toLowerCase() === name.toLowerCase(),
+      );
+      if (clash && clash[0] < name) {
+        errors.push(`${at}: differs from "${clash[0]}" only by case; log files would collide`);
+      }
       if (!v.object(value, at)) continue;
       v.keys(value, at, ["command", "paths", "exclude", "always", "dependsOn", "timeoutMs"]);
       const command = v.string(value.command, `${at}.command`, true);
@@ -123,7 +137,7 @@ export function parseConfig(raw: unknown, file: string): VerifikaConfig {
       const exclude = v.globs(value.exclude, `${at}.exclude`, true) ?? [];
       const always = v.boolean(value.always, `${at}.always`) ?? false;
       const dependsOn = v.stringArray(value.dependsOn, `${at}.dependsOn`) ?? [];
-      const checkTimeout = v.integer(value.timeoutMs, `${at}.timeoutMs`, 1);
+      const checkTimeout = v.integer(value.timeoutMs, `${at}.timeoutMs`, 1, MAX_TIMEOUT_MS);
       if (always && paths) {
         errors.push(
           `${at}: "always" and "paths" cannot be combined; an always-run check ignores paths`,

@@ -119,9 +119,27 @@ describe("parseConfig", () => {
     ],
     [
       { version: 1, checks: { a: { command: "x", timeoutMs: 0 } } },
-      "checks.a.timeoutMs: expected an integer >= 1",
+      "checks.a.timeoutMs: expected an integer between 1 and 2147483647",
     ],
     [{ version: 1, checks: { a: { command: "x", timeoutMs: 1.5 } } }, "expected an integer"],
+    [
+      { version: 1, checks: { a: { command: "x", timeoutMs: 3_000_000_000 } } },
+      "between 1 and 2147483647",
+    ],
+    [
+      { version: 1, defaults: { timeoutMs: 2_147_483_648 }, checks: { a: { command: "x" } } },
+      "defaults.timeoutMs",
+    ],
+    [{ version: 1, checks: { nul: { command: "x" } } }, "reserved device name"],
+    [{ version: 1, checks: { "COM1.x": { command: "x" } } }, "reserved device name"],
+    [
+      { version: 1, checks: { Lint: { command: "x" }, lint: { command: "y" } } },
+      'differs from "Lint" only by case',
+    ],
+    [
+      { $schema: 5, version: 1, checks: { a: { command: "x" } } },
+      "$schema: expected a non-empty string",
+    ],
     [
       { version: 1, defaults: { concurrency: 0 }, checks: { a: { command: "x" } } },
       "between 1 and 64",
@@ -193,6 +211,9 @@ describe("JSON schema", () => {
     { version: 1, checks: { a: { command: "x", always: true, paths: ["a"] } } },
     { version: 1, checks: { a: { command: "x", extra: 1 } } },
     { version: 1, defaults: { concurrency: 0 }, checks: { a: { command: "x" } } },
+    { version: 1, checks: { a: { command: "x", timeoutMs: 3_000_000_000 } } },
+    { version: 1, checks: { aux: { command: "x" } } },
+    { version: 1, changes: { base: " " }, checks: { a: { command: "x" } } },
   ];
 
   it.each(valid)("accepts what the runtime accepts: %j", (raw) => {

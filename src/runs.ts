@@ -58,7 +58,10 @@ export async function markLatest(root: string, runId: string): Promise<void> {
   await writeAtomic(path.join(root, STATE_DIR, LATEST_FILE), `${runId}\n`);
 }
 
-/** Keeps the newest `keep` runs, never deleting `current`. */
+/** Runs younger than this that are still `running` belong to a concurrent process; never prune them. */
+const ACTIVE_RUN_GRACE_MS = 6 * 60 * 60 * 1000;
+
+/** Keeps the newest `keep` runs, never deleting `current` or another run still in progress. */
 export async function pruneRuns(root: string, keep: number, current: string): Promise<void> {
   const directory = path.join(root, STATE_DIR, RUNS_DIR);
   let entries: string[];
@@ -67,14 +70,27 @@ export async function pruneRuns(root: string, keep: number, current: string): Pr
   } catch {
     return;
   }
-  const excess = entries
+  const candidates = entries
     .filter((name) => name !== current)
     .slice(0, Math.max(0, entries.length - keep));
+  const excess: string[] = [];
+  for (const name of candidates) {
+    if (!(await isActiveRun(path.join(directory, name)))) excess.push(name);
+  }
   await Promise.all(
     excess.map((name) =>
       rm(path.join(directory, name), { recursive: true, force: true }).catch(() => undefined),
     ),
   );
+}
+
+async function isActiveRun(directory: string): Promise<boolean> {
+  try {
+    const run = JSON.parse(await readFile(path.join(directory, RESULT_FILE), "utf8")) as RunResult;
+    return run.status === "running" && Date.now() - Date.parse(run.startedAt) < ACTIVE_RUN_GRACE_MS;
+  } catch {
+    return false;
+  }
 }
 
 export async function readRun(root: string, runId?: string): Promise<RunResult> {

@@ -207,6 +207,14 @@ describe("verifika run", () => {
     expect(usage.stderr).toContain("Unknown option '--bogus'");
   });
 
+  it("rejects empty --check and --changed-since values", async () => {
+    const root = project({ lint: pass("lint") });
+    const empty = await runCli(root, ["--check", ""]);
+    expect(empty.code).toBe(2);
+    expect(empty.stderr).toContain("--check needs at least one check name");
+    expect((await runCli(root, ["--changed-since="])).code).toBe(2);
+  });
+
   it("runs explicit checks with their dependencies first", async () => {
     const root = project({
       build: { command: "node check.mjs timeline timeline.txt build 200" },

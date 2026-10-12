@@ -26,7 +26,7 @@ _Verifika_ is Maltese for "verification".
 - **Deterministic.** Check selection comes from your config, file globs, dependencies and git. No heuristics, no LLM. When the change scope is unclear, Verifika runs everything or fails loudly; it never quietly skips a check.
 - **Token-efficient.** Agents get one line on success and a bounded failure preview on failure. Full logs stay on disk until asked for.
 - **Fast.** Independent checks run in parallel, within a concurrency limit. One small runtime dependency.
-- **Reliable.** Timeouts, fail-fast, process-tree cleanup, correct exit codes, and signal handling on Linux, macOS and Windows.
+- **Reliable.** Timeouts, fail-fast, process cleanup, correct exit codes and signal handling, tested on Linux, macOS and Windows.
 
 ## Install
 
@@ -104,7 +104,7 @@ The default is `human` on an interactive terminal and `agent` otherwise. Overrid
 | `json`  | Versioned result document     | Same document, `"status": "failed"`                 |
 | `quiet` | Nothing                       | One line on stderr                                  |
 
-Exit codes: `0` passed (or nothing to verify), `1` verification failed, `2` usage or configuration error, `130`/`143` interrupted.
+Exit codes: `0` passed (or nothing to verify), `1` verification failed, `2` usage or configuration error, `128+n` interrupted by a signal (`130` SIGINT, `143` SIGTERM).
 
 ## Logs
 

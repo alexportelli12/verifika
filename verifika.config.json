@@ -26,12 +26,12 @@
     },
     "test": {
       "command": "npm test",
-      "paths": ["src/**", "test/**", "schemas/**", "vitest.config.ts"],
+      "paths": ["src/**", "test/**", "schemas/**", "examples/**", "vitest.config.ts"],
       "dependsOn": ["build"]
     },
     "skill": {
       "command": "npm run check:skill",
-      "paths": ["skills/**", "scripts/check-skill.mjs", "src/main.ts"]
+      "paths": ["skills/**", "scripts/check-skill.mjs", "src/**"]
     },
     "pack": {
       "command": "npm run test:pack",

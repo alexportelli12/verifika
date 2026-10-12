@@ -79,7 +79,7 @@ verifika: FAIL typecheck (exit 2). Run: verifika logs typecheck
 
 ### JSON output
 
-`--mode json` prints exactly one JSON document to stdout. Command output never appears on stdout or stderr in this mode, so the stream is always parseable. The schema is versioned by `schemaVersion`; fields are only added within a version.
+For `run` and `plan`, `--mode json` prints exactly one JSON document to stdout, including for usage errors (exit 2) and internal errors (exit 70). `logs`, `init`, `--help` and `--version` always print text. Command output never appears on stdout or stderr in this mode, so the stream is always parseable. The schema is versioned by `schemaVersion`; fields are only added within a version.
 
 ```json
 {
@@ -113,7 +113,8 @@ verifika: FAIL typecheck (exit 2). Run: verifika logs typecheck
       "durationMs": 3101,
       "log": ".verifika/runs/20261012-143955-042-a1b2c3/typecheck.log",
       "preview": ["src/cart.ts(14,7): error TS2322: ..."],
-      "error": null
+      "error": null,
+      "warning": null
     }
   ]
 }
@@ -135,21 +136,21 @@ Usage and configuration errors in JSON mode print `{"schemaVersion": 1, "status"
 
 ## Exit codes
 
-| Code      | Meaning                                                                                                 |
-| --------- | ------------------------------------------------------------------------------------------------------- |
-| 0         | All selected checks passed, or nothing needed verifying. Also `plan`, `logs`, `init`, `--help` success. |
-| 1         | At least one selected check failed, timed out, could not start, was blocked or cancelled.               |
-| 2         | Usage or configuration error. Nothing was verified.                                                     |
-| 130 / 143 | Interrupted by SIGINT / SIGTERM (128 + signal number).                                                  |
-| 70        | Internal error (a bug; please report it).                                                               |
+| Code    | Meaning                                                                                                 |
+| ------- | ------------------------------------------------------------------------------------------------------- |
+| 0       | All selected checks passed, or nothing needed verifying. Also `plan`, `logs`, `init`, `--help` success. |
+| 1       | At least one selected check failed, timed out, could not start, was blocked or cancelled.               |
+| 2       | Usage or configuration error. Nothing was verified.                                                     |
+| 128 + n | Interrupted by a signal: 129 SIGHUP, 130 SIGINT, 143 SIGTERM.                                           |
+| 70      | Internal error (a bug; please report it).                                                               |
 
 A check's own exit code is in the JSON result and the agent output (`typecheck: exit 2`); Verifika's exit code summarises the run.
 
 ## Signals
 
-The first SIGINT, SIGTERM or SIGHUP stops scheduling, sends SIGTERM to every running check's process group (on Windows, `taskkill /T /F`), waits up to two seconds, then kills what is left. The run is recorded as `interrupted`. A second signal kills running checks immediately. If Verifika itself is killed with SIGKILL it cannot clean up; the run then stays `running` in `run.json`.
+The first SIGINT, SIGTERM or SIGHUP stops scheduling, sends SIGTERM to every running check's process group (on Windows, `taskkill /T /F`), waits up to two seconds, then kills what is left. The run is recorded as `interrupted`. A second signal kills running checks immediately. If Verifika itself is killed with SIGKILL it cannot clean up: because each check runs in its own process group, checks that are already running keep running, and the run stays `running` in `run.json`. Harnesses and CI timeouts that hard-kill processes should send SIGTERM first.
 
-After a check's main process exits, Verifika also terminates anything still left in its process group (such as a forgotten background server), so no check outlives the run. On Windows, processes that detach from the tree cannot be tracked this way.
+After a check's main process exits, Verifika also terminates anything still left in its process group on Linux and macOS (such as a forgotten background server). Two cases are out of reach: processes that leave the group (for example with `setsid`), and on Windows any descendant that outlives the check's main process, because the tree can no longer be found once its root has exited. If such a process keeps the output pipe open, Verifika stops reading after about four seconds and attaches a warning to the check (`warning` in JSON, a `warning:` line in agent output). The check's result is unaffected, but the process may still be running.
 
 ## Environment variables
 

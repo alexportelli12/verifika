@@ -80,6 +80,8 @@ export interface CheckResult {
   preview: string[];
   /** Spawn or internal error message. */
   error: string | null;
+  /** Non-fatal problem worth surfacing, e.g. a process that outlived the check. */
+  warning: string | null;
 }
 
 /** `running` is only ever on disk, for a run that has not finished (or crashed). */

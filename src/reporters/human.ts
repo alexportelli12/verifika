@@ -116,6 +116,9 @@ export function renderSummary(result: RunResult, style: Style): string {
       lines.push(...check.preview.map((line) => style.dim(`    ${line}`)));
     }
   }
+  for (const check of result.checks) {
+    if (check.warning) lines.push(style.yellow(`! ${check.name}: ${check.warning}`));
+  }
   const time = duration(result.durationMs);
   if (result.status === "passed") {
     lines.push(style.green(`✓ ${summary.passed} of ${summary.selected} checks passed (${time})`));

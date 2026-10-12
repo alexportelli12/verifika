@@ -3,6 +3,7 @@ export const ExitCode = {
   Passed: 0,
   Failed: 1,
   Usage: 2,
+  Internal: 70,
 } as const;
 
 /**

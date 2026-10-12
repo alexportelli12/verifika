@@ -20,7 +20,7 @@ Look for `verifika.config.json` in the repository root (or the package directory
    verifika
    ```
 
-   Runs only the checks matching your uncommitted and untracked changes.
+   Runs only the checks matching files changed since the configured `changes.base` (by default `HEAD`: your uncommitted and untracked changes).
 
 2. **To see what would run and why**, without running anything:
 
@@ -67,7 +67,8 @@ Run: verifika logs typecheck
 | 0         | Every selected check passed (or nothing needed verifying)              |
 | 1         | At least one check failed, timed out, could not start, or was blocked  |
 | 2         | Usage or configuration error: nothing was verified; fix the invocation |
-| 130 / 143 | Interrupted (SIGINT / SIGTERM): nothing conclusive                     |
+| 128+n     | Interrupted by a signal (130 SIGINT, 143 SIGTERM): nothing conclusive  |
+| 70        | Internal Verifika error: nothing conclusive; report it                 |
 
 Check statuses: `passed`, `failed`, `timed_out`, `error` (could not start), `blocked` (a dependency did not pass), `cancelled` (fail-fast stopped it), `interrupted`, and `skipped` (not selected for this run, so **not verified**).
 
