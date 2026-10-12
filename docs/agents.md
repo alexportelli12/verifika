@@ -8,7 +8,7 @@ What agents need is the right habits: run selective checks while iterating, run 
 
 [`skills/verifika/SKILL.md`](../skills/verifika/SKILL.md) follows the [Agent Skills](https://agentskills.io) format (a directory with a `SKILL.md` containing `name` and `description` frontmatter), which Claude Code, Codex and OpenCode all load. One skill serves all of them. It is about 110 lines, and agents load the body only when the description matches the task.
 
-The skill ships in the npm package (`node_modules/verifika/skills/verifika/`) and in this repository. Every `verifika` command it mentions is executed against the real CLI in this repository's test suite (`npm run check:skill`), so it cannot drift from the CLI.
+The skill ships in the npm package (`node_modules/verifika/skills/verifika/`) and in this repository. Every `vfk` command it mentions is executed against the real CLI in this repository's test suite (`npm run check:skill`), so it cannot drift from the CLI.
 
 ## Install the skill
 
@@ -50,30 +50,30 @@ For agents without skill support, put the essentials in your project's `AGENTS.m
 ```markdown
 ## Verification
 
-- Run `npx verifika` after changes; it runs only the affected checks.
-- Before saying a task is done, committing or opening a PR, run `npx verifika --all` and require `PASS` with exit code 0.
-- On failure, read the printed preview, then `npx verifika logs <check>` (or `--failed`). Do not read logs of passing checks.
+- Run `npx vfk` after changes; it runs only the affected checks.
+- Before saying a task is done, committing or opening a PR, run `npx vfk --all` and require `PASS` with exit code 0.
+- On failure, read the printed preview, then `npx vfk logs <check>` (or `--failed`). Do not read logs of passing checks.
 - A selective PASS does not cover skipped checks. Exit 2 means a usage/config error, not a passing run.
 ```
 
 ## Typical session
 
 ```text
-$ npx verifika                        # after editing src/cart.ts
+$ npx vfk                        # after editing src/cart.ts
 FAIL 1/2 (2.8s) selective: 1 file changed since HEAD (a1b2c3d); 3 skipped
 typecheck: exit 2
   src/cart.ts(14,7): error TS2322: Type 'string' is not assignable to type 'number'.
 Run: verifika logs typecheck
 
-$ npx verifika --check typecheck      # after the fix
+$ npx vfk --check typecheck      # after the fix
 PASS 1/1 (2.1s) explicit: --check typecheck; 4 skipped
 
-$ npx verifika --all                  # before delivery
+$ npx vfk --all                  # before delivery
 PASS 5/5 (14s) full run (--all)
 ```
 
 ## Wiring into existing workflows
 
 - **`npm run verify`.** Many agent workflows treat `npm run verify` as the authoritative gate. Point it at the full suite: `"verify": "verifika --all"`.
-- **CI.** `npx verifika` runs everything in CI automatically; `npx verifika --all` makes that explicit. Use `--mode json` if a later step needs structured results, and upload `.verifika/runs/` as an artifact if you want logs (they may contain secrets).
-- **Hooks.** For a pre-push hook, use `npx verifika --changed-since origin/main` for speed, but keep `--all` in CI.
+- **CI.** `npx vfk` runs everything in CI automatically; `npx vfk --all` makes that explicit. Use `--mode json` if a later step needs structured results, and upload `.verifika/runs/` as an artifact if you want logs (they may contain secrets).
+- **Hooks.** For a pre-push hook, use `npx vfk --changed-since origin/main` for speed, but keep `--all` in CI.

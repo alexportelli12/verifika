@@ -35,7 +35,7 @@ export function findConfigFile(cwd: string, explicit?: string): string {
     if (parent === directory) {
       throw new VerifikaError(
         `no ${CONFIG_FILE} found in ${cwd} or any parent directory`,
-        "Create one with: verifika init",
+        "Create one with: vfk init",
       );
     }
     directory = parent;

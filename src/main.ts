@@ -25,15 +25,14 @@ const COMMANDS = ["run", "plan", "logs", "init", "help"] as const;
 type Command = (typeof COMMANDS)[number];
 const DEFAULT_PREVIEW_LINES = 10;
 
-export const HELP = `verifika - run the checks your changes need, with minimal output
+export const HELP = `vfk - run the checks your changes need, with minimal output
+(vfk is short for verifika; the two commands are identical)
 
 Usage:
-  verifika [run] [options]        Verify (selective locally, full in CI)
-  verifika plan [options]         Show which checks would run and why
-  verifika logs [check...]        Show logs from the latest run
-  verifika init [--force]         Create verifika.config.json from package.json scripts
-
-vfk is a shorthand for verifika: vfk plan, vfk --all, ...
+  vfk [run] [options]             Verify (selective locally, full in CI)
+  vfk plan [options]              Show which checks would run and why
+  vfk logs [check...]             Show logs from the latest run
+  vfk init [--force]              Create verifika.config.json from package.json scripts
 
 Selection (run, plan):
       --all                       Run every check
@@ -230,7 +229,7 @@ async function runInit(io: Io, values: Values): Promise<number> {
   const { file, checks } = await initConfig(root, Boolean(values.force));
   io.out(`Created ${path.relative(io.cwd, file) || file} with checks: ${checks.join(", ")}\n`);
   io.out(
-    'Review the commands, add "paths" to checks that only some files affect, format the file if your repository checks formatting, then run: verifika plan\n',
+    'Review the commands, add "paths" to checks that only some files affect, format the file if your repository checks formatting, then run: vfk plan\n',
   );
   return ExitCode.Passed;
 }
@@ -249,7 +248,7 @@ function parse(args: string[], command: Command): { values: Values; positionals:
     return { values: values as Values, positionals };
   } catch (error) {
     const message = (error as Error).message.replace(/\. To specify a positional argument.*$/s, "");
-    throw new VerifikaError(message, `Run "verifika --help" for usage.`);
+    throw new VerifikaError(message, `Run "vfk --help" for usage.`);
   }
 }
 

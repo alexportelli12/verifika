@@ -149,22 +149,22 @@ Renames are counted as a deletion of the old path plus an addition of the new pa
 
 When the change set cannot be determined:
 
-| Cause                                      | Implicit selective run (`verifika`) | Explicit (`--changed`, `--changed-since`) |
-| ------------------------------------------ | ----------------------------------- | ----------------------------------------- |
-| Not a git repository, or git not installed | Runs everything, prints the reason  | Exit 2 with the reason                    |
-| Repository has no commits yet              | Runs everything, prints the reason  | Exit 2                                    |
-| Base ref does not exist                    | Runs everything, prints the reason  | Exit 2, with a hint to fetch              |
-| No merge-base (shallow clone, unrelated)   | Runs everything, prints the reason  | Exit 2, with a hint to unshallow          |
+| Cause                                      | Implicit selective run (`vfk`)     | Explicit (`--changed`, `--changed-since`) |
+| ------------------------------------------ | ---------------------------------- | ----------------------------------------- |
+| Not a git repository, or git not installed | Runs everything, prints the reason | Exit 2 with the reason                    |
+| Repository has no commits yet              | Runs everything, prints the reason | Exit 2                                    |
+| Base ref does not exist                    | Runs everything, prints the reason | Exit 2, with a hint to fetch              |
+| No merge-base (shallow clone, unrelated)   | Runs everything, prints the reason | Exit 2, with a hint to unshallow          |
 
-In CI, shallow clones are common. `verifika` in CI runs everything without consulting git. If you opt into `--changed-since` in CI, fetch enough history (`actions/checkout` with `fetch-depth: 0`).
+In CI, shallow clones are common. `vfk` in CI runs everything without consulting git. If you opt into `--changed-since` in CI, fetch enough history (`actions/checkout` with `fetch-depth: 0`).
 
 ## CI detection
 
-A run counts as CI when `CI` is set to anything other than `false`/`0`/empty, or when any provider variable is set (`GITHUB_ACTIONS`, `GITLAB_CI`, `BUILDKITE`, `CIRCLECI`, `TRAVIS`, `JENKINS_URL`, `TF_BUILD`, `TEAMCITY_VERSION`, `BITBUCKET_BUILD_NUMBER`, `CODEBUILD_BUILD_ID`, `DRONE`, `APPVEYOR`, `SEMAPHORE`). Environment variables can only turn CI mode on: `CI=false` does not cancel a provider variable, because some build setups export it for unrelated reasons, and there is no variable that disables detection. In CI, plain `verifika` always runs every check. A selective CI run needs an explicit `--changed` or `--changed-since <ref>` on the command line, and its output says `selective in CI by request`.
+A run counts as CI when `CI` is set to anything other than `false`/`0`/empty, or when any provider variable is set (`GITHUB_ACTIONS`, `GITLAB_CI`, `BUILDKITE`, `CIRCLECI`, `TRAVIS`, `JENKINS_URL`, `TF_BUILD`, `TEAMCITY_VERSION`, `BITBUCKET_BUILD_NUMBER`, `CODEBUILD_BUILD_ID`, `DRONE`, `APPVEYOR`, `SEMAPHORE`). Environment variables can only turn CI mode on: `CI=false` does not cancel a provider variable, because some build setups export it for unrelated reasons, and there is no variable that disables detection. In CI, plain `vfk` always runs every check. A selective CI run needs an explicit `--changed` or `--changed-since <ref>` on the command line, and its output says `selective in CI by request`.
 
 ## Run storage
 
-Logs live in `.verifika/` under the project root. Verifika writes `.verifika/.gitignore` containing `*`, so the directory is ignored without touching your own `.gitignore`. Each run directory contains one `<check>.log` per executed check and `run.json`, the same document `--mode json` prints. The latest run, which `verifika logs` shows by default, is simply the newest run directory: run ids sort by start time.
+Logs live in `.verifika/` under the project root. Verifika writes `.verifika/.gitignore` containing `*`, so the directory is ignored without touching your own `.gitignore`. Each run directory contains one `<check>.log` per executed check and `run.json`, the same document `--mode json` prints. The latest run, which `vfk logs` shows by default, is simply the newest run directory: run ids sort by start time.
 
 Several Verifika processes can share a project directory safely (for example two agents, or an agent and an editor integration):
 

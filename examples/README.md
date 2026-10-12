@@ -1,6 +1,6 @@
 # Example configurations
 
-Starting points to copy into your project as `verifika.config.json`. Adjust script names and globs to your layout, then check the result with `npx verifika plan`.
+Starting points to copy into your project as `verifika.config.json`. Adjust script names and globs to your layout, then check the result with `npx vfk plan`.
 
 | File                                             | For                                                                                                      |
 | ------------------------------------------------ | -------------------------------------------------------------------------------------------------------- |

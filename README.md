@@ -4,56 +4,91 @@
 [![Release](https://img.shields.io/github/v/release/alexportelli12/verifika)](https://github.com/alexportelli12/verifika/releases/latest)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-Run the checks your changes need, concurrently, with minimal output.
+**Run only the checks your change needs. Get one line back when they pass.**
 
-Verifika is a small CLI for repository verification. You declare your checks (lint, typecheck, tests, build, ...) in `verifika.config.json`. Locally, Verifika runs only the checks affected by your changes; in CI it runs everything. Successful runs print one line, failures print exactly what failed and how to see the full logs. It works the same for developers, CI pipelines and AI coding agents (Claude Code, Codex, OpenCode, and others).
+Every repository has a verification gate: format, lint, typecheck, tests, build. Using it well is harder than it looks:
+
+- **Running everything is slow.** A one-line fix waits minutes for checks it cannot affect, so people (and agents) skip the gate or batch changes until the end.
+- **Picking checks by hand is unreliable.** It is easy to forget the one that breaks, and "it passed" stops meaning much.
+- **Failures are buried in noise.** A test runner can print tens of thousands of lines to report one failed assertion. A coding agent pays for every line in tokens and context, and often never reaches the line that matters.
+
+Verifika fixes this with one config file and one command. You list your checks in `verifika.config.json`, with the files each one covers. Then `vfk` runs only the checks your changes affect, CI runs all of them, and the output says exactly what failed:
 
 ```text
-$ verifika
+$ vfk
 PASS 3/3 (4.1s) selective: 2 files changed since HEAD (a1b2c3d); 2 skipped
 
-$ verifika --all
+$ vfk --all
 FAIL 4/5 (12s) full run (--all)
 typecheck: exit 2
   src/cart.ts(14,7): error TS2322: Type 'string' is not assignable to type 'number'.
-Run: verifika logs typecheck
+Run: vfk logs typecheck
 ```
 
-_Verifika_ is Maltese for "verification".
+## Why Verifika
 
-## Why
+- **Small output, especially for agents.** On a real Angular project, one failing test produced 94,900 bytes of output with the project's previous verify script (~23,700 tokens). Verifika reported the same failure in 369 bytes (~90 tokens): the test name, the assertion and the totals. Full logs stay on disk until you ask for them.
+- **Less waiting.** Locally, only affected checks run: in a 25-check monorepo, a typical edit ran 1–13 of them. Checks that share no build outputs can also run in parallel; on that Angular project, four at a time cut the full gate from 95.5 s to 61.7 s. [Measurements](docs/benchmarks.md).
+- **Deterministic and conservative.** Selection comes from your config, file globs, dependencies and git; no heuristics, no LLM. When the scope of a change is unclear, Verifika runs everything or fails loudly. It never quietly skips a check, and in CI it runs the full suite unless you explicitly ask for a selective run.
+- **Trustworthy results.** Timeouts, fail-fast, correct exit codes and signal handling. A check only passes once its whole process tree has exited. Tested on Linux, macOS and Windows.
+- **Built for humans and coding agents alike.** Live progress on a terminal, one line in agent sessions, JSON for scripts. It ships an [agent skill](skills/verifika/SKILL.md) for Claude Code, Codex, OpenCode and others.
+- **Small.** One JSON file, one runtime dependency, no daemon, no cache to invalidate.
 
-- **Deterministic.** Check selection comes from your config, file globs, dependencies and git. No heuristics, no LLM. When the change scope is unclear, Verifika runs everything or fails loudly; it never quietly skips a check.
-- **Token-efficient.** Agents get one line on success and a bounded failure preview on failure. Full logs stay on disk until asked for.
-- **Fast.** Selective runs skip unaffected checks, and independent checks can run in parallel once you opt in (`defaults.concurrency`). One small runtime dependency.
-- **Reliable.** Timeouts, fail-fast, process cleanup, correct exit codes and signal handling, tested on Linux, macOS and Windows.
+_Verifika_ is Maltese for "verification". The command is `vfk`, short for `verifika`; both are installed and identical.
 
-## Install
+## Get started
 
 Requires Node.js 22.13 or newer.
 
+### With a coding agent
+
+Paste this prompt into Claude Code, Codex, OpenCode or another coding agent, from your repository root. It installs Verifika, writes and validates a config for your project, and reports what it found.
+
+```text
+Set up Verifika (https://github.com/alexportelli12/verifika) in this repository.
+
+1. Check that Node.js is 22.13 or newer, and install the project's dependencies if
+   they are missing. Install Verifika as a dev dependency with this repository's
+   package manager (npm install --save-dev verifika, or the pnpm/yarn equivalent).
+   It provides the `vfk` command.
+2. Run `npx vfk init` to create verifika.config.json, then refine it by reading
+   package.json, the CI workflows and the tool configs:
+   - One check per quality gate the project actually has (such as format, lint,
+     typecheck, unit tests, build). Do not invent checks for tools it does not use,
+     or add a check that another one already fully covers. Every command must be
+     non-interactive and exit on its own: no watch mode, no prompts, no dev servers.
+   - Give each check `paths` globs for the files that can affect it, so local runs
+     select only what a change needs. If unsure, leave `paths` out: the check then
+     runs on every change.
+   - Add `dependsOn` where one check needs another's output (for example e2e after build).
+   - Keep concurrency at 1 unless the checks clearly share no build outputs.
+   - If package.json has no "verify" script, add "verify": "vfk --all".
+   Reference: https://github.com/alexportelli12/verifika/blob/main/docs/configuration.md
+3. Validate the config:
+   - Run `npx vfk --all`. If a check fails, decide whether the config is wrong (fix it)
+     or the project already fails that check (report it; do not fix it).
+   - Run `npx vfk plan`. Until this setup is committed, the changed package.json and
+     lockfile select every check; that is expected. Explain which checks a typical
+     source edit and a documentation-only edit would select once it is committed.
+4. Install the agent skill: copy node_modules/verifika/skills/verifika into this
+   agent's skills directory (see
+   https://github.com/alexportelli12/verifika/blob/main/docs/agents.md).
+
+Do not change source code or existing scripts to make checks pass, and do not commit.
+Finish with: the checks you configured and why, the --all result, the expected
+selection for those two edits, and any existing failures you found.
+```
+
+Review the config it writes before committing it: the commands in it run on every verification.
+
+### By hand
+
 ```sh
 npm install --save-dev verifika
+npx vfk init     # creates verifika.config.json from your package.json scripts
 ```
 
-The package installs two commands: `verifika` and its shorthand `vfk`. They are the same program, so use whichever you prefer:
-
-```sh
-npx verifika plan    # same as: npx vfk plan
-npx vfk --all        # same as: npx verifika --all
-```
-
-The docs use `verifika` throughout. To install it globally instead, run `npm install --global verifika`; to try it without installing, run `npx verifika --help`.
-
-## Quick start
-
-Generate a starter config from your `package.json` scripts:
-
-```sh
-npx verifika init
-```
-
-Or write `verifika.config.json` yourself:
+`init` only maps conventional script names (`lint`, `test`, `build`, ...) and leaves every check unfiltered, so open the file and give each check `paths`:
 
 ```json
 {
@@ -72,35 +107,35 @@ Or write `verifika.config.json` yourself:
 }
 ```
 
-If your repository checks the formatting of every file (for example `prettier --check .`), format the new `verifika.config.json` too.
-
-Then:
+If your repository checks the formatting of every file (for example `prettier --check .`), format the new `verifika.config.json` too. Then:
 
 ```sh
-npx verifika plan     # which checks would run for your changes, and why
-npx verifika          # run them
-npx verifika --all    # run everything (do this before you push)
+npx vfk plan     # which checks would run for your changes, and why
+npx vfk          # run them
+npx vfk --all    # run everything (do this before you push)
 ```
 
 Add a script so everyone runs the same full gate:
 
 ```json
-{ "scripts": { "verify": "verifika --all" } }
+{ "scripts": { "verify": "vfk --all" } }
 ```
+
+Run logs go to `.verifika/`, which ignores itself in git, so you do not need to edit `.gitignore`. To install globally instead, run `npm install --global verifika`.
 
 ## How checks are selected
 
-| Situation                                      | What runs                                                                                                           |
-| ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| `verifika` locally                             | Checks whose `paths` match files changed since `changes.base` (default `HEAD`: your uncommitted and untracked work) |
-| `verifika` in CI (`CI` or a known CI variable) | Everything; only `--changed`/`--changed-since` on the command line can narrow it                                    |
-| `verifika --all`                               | Everything                                                                                                          |
-| `verifika --check lint`                        | `lint` and its dependencies                                                                                         |
-| `verifika --changed-since origin/main`         | Checks matching files changed since `merge-base(origin/main, HEAD)`, plus uncommitted and untracked files           |
-| A changed file matches `invalidateAll`         | Everything                                                                                                          |
-| Git unavailable, no commits, unknown base      | Everything, with the reason printed (or an error, when you asked for `--changed`/`--changed-since` explicitly)      |
+| Situation                                 | What runs                                                                                                           |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `vfk` locally                             | Checks whose `paths` match files changed since `changes.base` (default `HEAD`: your uncommitted and untracked work) |
+| `vfk` in CI (`CI` or a known CI variable) | Everything; only `--changed`/`--changed-since` on the command line can narrow it                                    |
+| `vfk --all`                               | Everything                                                                                                          |
+| `vfk --check lint`                        | `lint` and its dependencies                                                                                         |
+| `vfk --changed-since origin/main`         | Checks matching files changed since `merge-base(origin/main, HEAD)`, plus uncommitted and untracked files           |
+| A changed file matches `invalidateAll`    | Everything                                                                                                          |
+| Git unavailable, no commits, unknown base | Everything, with the reason printed (or an error, when you asked for `--changed`/`--changed-since` explicitly)      |
 
-A check without `paths` runs whenever any file changed; `"always": true` runs it even when nothing changed. Selecting a check also selects its `dependsOn` checks. `verifika plan` shows every decision.
+A check without `paths` runs whenever any file changed; `"always": true` runs it even when nothing changed. Selecting a check also selects its `dependsOn` checks. `vfk plan` shows every decision.
 
 ## Output modes
 
@@ -120,10 +155,10 @@ Exit codes: `0` passed (or nothing to verify), `1` verification failed, `2` usag
 Every run stores each check's combined stdout/stderr under `.verifika/runs/<run-id>/`. The directory ignores itself in git, and only the last 10 runs are kept (`defaults.keepRuns`).
 
 ```sh
-verifika logs                    # latest run: statuses and log paths
-verifika logs typecheck          # full log of one check
-verifika logs --failed           # logs of every failed check
-verifika logs test --tail 50     # last 50 lines
+vfk logs                  # latest run: statuses and log paths
+vfk logs typecheck        # full log of one check
+vfk logs --failed         # logs of every failed check
+vfk logs test --tail 50   # last 50 lines
 ```
 
 Logs contain whatever your commands print, which can include secrets. They never leave your machine; keep `.verifika/` out of anything you publish.

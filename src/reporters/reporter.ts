@@ -59,8 +59,7 @@ export function describeProblem(check: CheckResult): string {
 export function logsHint(result: RunResult): string | null {
   const withLogs = problems(result).filter((check) => isFailureStatus(check.status) && check.log);
   if (withLogs.length === 0) return null;
-  const command =
-    withLogs.length === 1 ? `verifika logs ${withLogs[0]?.name}` : "verifika logs --failed";
+  const command = withLogs.length === 1 ? `vfk logs ${withLogs[0]?.name}` : "vfk logs --failed";
   return result.latest ? command : `${command} --run ${result.runId}`;
 }
 

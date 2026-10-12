@@ -181,7 +181,7 @@ function isProcessAlive(pid: number): boolean {
 export async function readRun(root: string, runId?: string): Promise<RunResult> {
   const id = runId ?? (await readLatest(root));
   if (id === null) {
-    throw new VerifikaError("no verification runs recorded yet", "Run `verifika` first.");
+    throw new VerifikaError("no verification runs recorded yet", "Run `vfk` first.");
   }
   if (!RUN_ID_PATTERN.test(id)) throw new VerifikaError(`invalid run id "${id}"`);
   try {

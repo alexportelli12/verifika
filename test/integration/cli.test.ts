@@ -63,7 +63,7 @@ describe("verifika run", () => {
     expect(result.stdout).toContain(
       "typecheck: exit 2\n  src/app.ts(3,7): error TS2322: bad-type\n",
     );
-    expect(result.stdout).toContain("Run: verifika logs typecheck");
+    expect(result.stdout).toContain("Run: vfk logs typecheck");
     expect(result.stdout).not.toContain("noise line");
   });
 
@@ -104,7 +104,7 @@ describe("verifika run", () => {
     const failed = await runCli(root, ["--all", "--mode", "quiet"]);
     expect(failed.code).toBe(1);
     expect(failed.stdout).toBe("");
-    expect(failed.stderr).toBe("verifika: FAIL lint (exit 1). Run: verifika logs lint\n");
+    expect(failed.stderr).toBe("verifika: FAIL lint (exit 1). Run: vfk logs lint\n");
   });
 
   it("shows progress in human mode", async () => {
@@ -609,8 +609,8 @@ describe("verifika logs", () => {
     const logs = await runCli(root, ["logs", "broken", "--run", json.runId]);
     expect(logs.stdout).toContain("slow-run-failure");
     const agent = await runCli(root, ["--check", "broken"]);
-    const hint = /Run: (verifika logs broken.*)\n/.exec(agent.stdout)?.[1];
-    expect(hint).toBe("verifika logs broken");
+    const hint = /Run: (vfk logs broken.*)\n/.exec(agent.stdout)?.[1];
+    expect(hint).toBe("vfk logs broken");
 
     // Once finished, retention applies again: only the newest run remains.
     expect(readdirSync(path.join(root, ".verifika", "runs"))).toHaveLength(1);
@@ -718,7 +718,7 @@ describe("verifika init, help and version", () => {
     const root = tempDir();
     const help = await runCli(root, ["--help"]);
     expect(help.code).toBe(0);
-    expect(help.stdout).toContain("verifika plan [options]");
+    expect(help.stdout).toContain("vfk plan [options]");
     const version = await runCli(root, ["--version"]);
     const manifest = JSON.parse(
       readFileSync(new URL("../../package.json", import.meta.url), "utf8"),
