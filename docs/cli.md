@@ -53,6 +53,16 @@ On an interactive terminal in `human` mode (the default there), `vfk logs` is fo
 - Log paths are clickable [OSC 8](https://gist.github.com/egmontkob/eb114294efbcd5adb1944c9f3cb5feda) `file://` links, unless CI is detected, `TERM` is `dumb` or `VERIFIKA_HYPERLINKS=0`.
 - Log contents go through `$PAGER`, or `less -R -F -X` when it is unset (like git, `LESS=FRX` is set for the pager unless you set `LESS`). If the pager program is not installed (for example `less` on Windows), logs print directly. `--tail` and `--no-pager` never page, and nothing is paged when stdout is not a terminal.
 
+## Init (`init`)
+
+`vfk init` writes a starter `verifika.config.json` from conventional `package.json` script names (`--force` overwrites an existing config). It also adds two scripts to `package.json` when they are absent:
+
+```json
+{ "scripts": { "verify": "vfk", "verify:ci": "vfk --all" } }
+```
+
+`verify` is selective, for local work; `verify:ci` is the full gate for CI and before delivery. Existing scripts with those names are never overwritten: `init` reports them so you can point them at `vfk` once the configured checks cover what they ran. The file keeps its indentation, line endings, key order and trailing newline.
+
 ## Output (`--mode`)
 
 `human`, `agent`, `json` or `quiet`. Default: `human` when stdout is a terminal, otherwise `agent`. The `VERIFIKA_MODE` environment variable sets the default. `human` mode uses colour on a terminal unless `NO_COLOR` is set (`FORCE_COLOR` enables it elsewhere).
@@ -104,7 +114,7 @@ When nothing is selected:
 
 ```text
 PASS 0/0 (0.0s) selective: no files changed since HEAD (a1b2c3d); 4 skipped
-Nothing to verify for these changes. Full run: verifika --all
+Nothing to verify for these changes. Full run: vfk --all
 ```
 
 ### Quiet output
@@ -112,7 +122,7 @@ Nothing to verify for these changes. Full run: verifika --all
 Nothing on success. On failure, one line on stderr:
 
 ```text
-verifika: FAIL typecheck (exit 2). Run: verifika logs typecheck
+verifika: FAIL typecheck (exit 2). Run: vfk logs typecheck
 ```
 
 ### JSON output

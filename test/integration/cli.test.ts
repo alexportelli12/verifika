@@ -758,9 +758,31 @@ describe("verifika init, help and version", () => {
       test: { command: "pnpm run test" },
       build: { command: "pnpm run build" },
     });
+    expect(result.stdout).toContain(
+      'Added package.json scripts: "verify": "vfk", "verify:ci": "vfk --all"\n',
+    );
+    const manifest = JSON.parse(readFileSync(path.join(root, "package.json"), "utf8"));
+    expect(manifest.scripts).toMatchObject({ verify: "vfk", "verify:ci": "vfk --all" });
     expect((await runCli(root, ["plan"])).code).toBe(0);
     expect((await runCli(root, ["init"])).code).toBe(2);
-    expect((await runCli(root, ["init", "--force"])).code).toBe(0);
+    const again = await runCli(root, ["init", "--force"]);
+    expect(again.code).toBe(0);
+    expect(again.stdout).toContain('package.json already has "verify": "vfk"\n');
+  });
+
+  it("leaves existing verify scripts alone and says so", async () => {
+    const root = tempDir();
+    writeFiles(root, {
+      "package.json": `${JSON.stringify({ scripts: { lint: "eslint .", verify: "npm run lint" } }, null, 2)}\n`,
+    });
+    const result = await runCli(root, ["init"]);
+    expect(result.code).toBe(0);
+    expect(result.stdout).toContain('Added package.json scripts: "verify:ci": "vfk --all"\n');
+    expect(result.stdout).toContain(
+      'Kept the existing "verify" script (npm run lint); to use Verifika, change it to "vfk" once the checks cover everything it runs\n',
+    );
+    const manifest = JSON.parse(readFileSync(path.join(root, "package.json"), "utf8"));
+    expect(manifest.scripts.verify).toBe("npm run lint");
   });
 
   it("prints help and version", async () => {

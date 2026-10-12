@@ -62,7 +62,14 @@ Set up Verifika (https://github.com/alexportelli12/verifika) in this repository.
      runs on every change.
    - Add `dependsOn` where one check needs another's output (for example e2e after build).
    - Keep concurrency at 1 unless the checks clearly share no build outputs.
-   - If package.json has no "verify" script, add "verify": "vfk --all".
+   - Make sure package.json has two scripts: "verify": "vfk" (selective, for local
+     work) and "verify:ci": "vfk --all" (the full gate). `vfk init` adds them when
+     they are missing. If a "verify" or "verify:ci" script already exists, replace
+     it only when the configured checks cover everything it ran; otherwise leave it
+     and report the conflict. This is the one exception to the rule below about
+     existing scripts.
+   - If the CI workflow runs the gate some other way, report that switching it to
+     `npm run verify:ci` is recommended. Do not edit the workflow.
    Reference: https://github.com/alexportelli12/verifika/blob/main/docs/configuration.md
 3. Validate the config:
    - Run `npx vfk --all`. If a check fails, decide whether the config is wrong (fix it)
@@ -74,9 +81,11 @@ Set up Verifika (https://github.com/alexportelli12/verifika) in this repository.
    agent's skills directory (see
    https://github.com/alexportelli12/verifika/blob/main/docs/agents.md).
 
-Do not change source code or existing scripts to make checks pass, and do not commit.
+Do not change source code or existing scripts to make checks pass (except "verify"
+and "verify:ci", as step 2 describes), and do not commit.
 Finish with: the checks you configured and why, the --all result, the expected
-selection for those two edits, and any existing failures you found.
+selection for those two edits, the scripts you added, replaced or left (with any
+conflicts), any CI recommendation, and any existing failures you found.
 ```
 
 Review the config it writes before committing it: the commands in it run on every verification.
@@ -85,7 +94,8 @@ Review the config it writes before committing it: the commands in it run on ever
 
 ```sh
 npm install --save-dev verifika
-npx vfk init     # creates verifika.config.json from your package.json scripts
+npx vfk init     # creates verifika.config.json from your package.json scripts,
+                 # and adds "verify" / "verify:ci" scripts if they are missing
 ```
 
 `init` only maps conventional script names (`lint`, `test`, `build`, ...) and leaves every check unfiltered, so open the file and give each check `paths`:
@@ -115,11 +125,13 @@ npx vfk          # run them
 npx vfk --all    # run everything (do this before you push)
 ```
 
-Add a script so everyone runs the same full gate:
+`init` adds two scripts unless package.json already has scripts with those names (it never overwrites them):
 
 ```json
-{ "scripts": { "verify": "vfk --all" } }
+{ "scripts": { "verify": "vfk", "verify:ci": "vfk --all" } }
 ```
+
+`npm run verify` runs the checks your changes affect, for quick feedback while you work. `npm run verify:ci` runs every check: it is the full gate, so use it in CI and before you push or open a pull request.
 
 Run logs go to `.verifika/`, which ignores itself in git, so you do not need to edit `.gitignore`. To install globally instead, run `npm install --global verifika`.
 
@@ -141,12 +153,14 @@ A check without `paths` runs whenever any file changed; `"always": true` runs it
 
 The default is `human` on an interactive terminal and `agent` otherwise. Override with `--mode` or `VERIFIKA_MODE`.
 
-| Mode    | Success                       | Failure                                             |
-| ------- | ----------------------------- | --------------------------------------------------- |
-| `human` | Live progress, summary        | Failing checks, previews, logs hint                 |
-| `agent` | One line: `PASS 4/4 (4.3s) …` | One line per problem, bounded preview, logs command |
-| `json`  | Versioned result document     | Same document, `"status": "failed"`                 |
-| `quiet` | Nothing                       | One line on stderr                                  |
+| Mode    | Success                       | Failure                                                         |
+| ------- | ----------------------------- | --------------------------------------------------------------- |
+| `human` | Live status block, summary    | Failing checks with command and rerun hint, previews, logs hint |
+| `agent` | One line: `PASS 4/4 (4.3s) …` | One line per problem, bounded preview, logs command             |
+| `json`  | Versioned result document     | Same document, `"status": "failed"`                             |
+| `quiet` | Nothing                       | One line on stderr                                              |
+
+In `human` mode on an interactive terminal, a live status block shows progress, each running check with its latest output line, and what the queued checks wait on; finished checks print above it. In CI, when piped, with `TERM=dumb`, or with `--no-live` / `VERIFIKA_LIVE=0`, `human` mode prints plain lines instead (one per check start and end, plus a note every 30 seconds for long checks), which read well in logs. `NO_COLOR` turns colour off in both.
 
 Exit codes: `0` passed (or nothing to verify), `1` verification failed, `2` usage or configuration error, `128+n` interrupted by a signal (`130` SIGINT, `143` SIGTERM).
 

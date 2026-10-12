@@ -51,8 +51,8 @@
     "test": "vitest run",
     "test:pack": "node scripts/pack-smoke.mjs",
     "check:skill": "node scripts/check-skill.mjs",
-    "verifika": "node src/cli.ts",
-    "verify": "node src/cli.ts --all",
+    "verify": "node src/cli.ts",
+    "verify:ci": "node src/cli.ts --all",
     "prepack": "npm run build"
   },
   "dependencies": {

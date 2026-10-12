@@ -33,7 +33,7 @@ jobs:
           cache: npm
       - run: npm ci
       # Verifika verifies itself: format, lint, typecheck, build, tests, skill, packaged install.
-      - run: npm run verify -- --mode human
+      - run: npm run verify:ci -- --mode human
       - name: Show failed check logs
         if: failure()
         run: node src/cli.ts logs --failed --tail 200

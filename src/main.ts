@@ -3,7 +3,7 @@ import path from "node:path";
 import { parseArgs, type ParseArgsConfig } from "node:util";
 import { findConfigFile, loadConfig } from "./config.ts";
 import { ExitCode, VerifikaError } from "./errors.ts";
-import { initConfig } from "./init.ts";
+import { addVerifyScripts, initConfig, VERIFY_SCRIPTS } from "./init.ts";
 import { showLogs, type LogsRequest } from "./logs.ts";
 import { pagerAvailable, pagerCommand } from "./pager.ts";
 import { plan, type PlanRequest } from "./planner.ts";
@@ -39,6 +39,7 @@ Usage:
   vfk plan [options]              Show which checks would run and why
   vfk logs [check...]             Show logs from the latest run
   vfk init [--force]              Create verifika.config.json from package.json scripts
+                                  and add "verify"/"verify:ci" scripts if absent
 
 Selection (run, plan):
       --all                       Run every check
@@ -258,6 +259,20 @@ async function runInit(io: Io, values: Values): Promise<number> {
   const root = values.config ? path.dirname(path.resolve(io.cwd, values.config as string)) : io.cwd;
   const { file, checks } = await initConfig(root, Boolean(values.force));
   io.out(`Created ${path.relative(io.cwd, file) || file} with checks: ${checks.join(", ")}\n`);
+  const scripts = await addVerifyScripts(root);
+  if (scripts.added.length > 0) {
+    const added = scripts.added.map((name) => `"${name}": "${VERIFY_SCRIPTS[name]}"`);
+    io.out(`Added package.json scripts: ${added.join(", ")}\n`);
+  }
+  for (const { name, command } of scripts.kept) {
+    if (command === VERIFY_SCRIPTS[name]) {
+      io.out(`package.json already has "${name}": "${command}"\n`);
+      continue;
+    }
+    io.out(
+      `Kept the existing "${name}" script (${command}); to use Verifika, change it to "${VERIFY_SCRIPTS[name]}" once the checks cover everything it runs\n`,
+    );
+  }
   io.out(
     'Review the commands, add "paths" to checks that only some files affect, format the file if your repository checks formatting, then run: vfk plan\n',
   );
