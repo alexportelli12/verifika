@@ -1,0 +1,72 @@
+{
+  "name": "verifika",
+  "version": "0.0.1",
+  "description": "Deterministic, agent-friendly repository verification: run the checks your changes need, concurrently, with minimal output.",
+  "keywords": [
+    "verify",
+    "verification",
+    "ci",
+    "lint",
+    "test",
+    "task-runner",
+    "ai-agents",
+    "claude-code",
+    "codex",
+    "monorepo"
+  ],
+  "homepage": "https://github.com/alexportelli12/verifika#readme",
+  "bugs": {
+    "url": "https://github.com/alexportelli12/verifika/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/alexportelli12/verifika.git"
+  },
+  "license": "MIT",
+  "author": "Alex Portelli",
+  "type": "module",
+  "bin": {
+    "verifika": "dist/cli.js",
+    "vfk": "dist/cli.js"
+  },
+  "exports": {
+    "./package.json": "./package.json",
+    "./schemas/verifika.schema.json": "./schemas/verifika.schema.json"
+  },
+  "files": [
+    "dist",
+    "schemas",
+    "skills",
+    "CHANGELOG.md"
+  ],
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "scripts": {
+    "build": "node scripts/clean-dist.mjs && tsc -p tsconfig.build.json && node -e \"fs.chmodSync('dist/cli.js', 0o755)\"",
+    "typecheck": "tsc -p tsconfig.json",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "vitest run",
+    "test:pack": "node scripts/pack-smoke.mjs",
+    "check:skill": "node scripts/check-skill.mjs",
+    "verifika": "node src/cli.ts",
+    "verify": "node src/cli.ts --all",
+    "prepack": "npm run build"
+  },
+  "dependencies": {
+    "picomatch": "^4.0.7"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^22.20.5",
+    "@types/picomatch": "^4.0.3",
+    "ajv": "^8.20.0",
+    "eslint": "^10.12.0",
+    "prettier": "^3.9.10",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.71.2",
+    "vitest": "^5.0.4"
+  }
+}

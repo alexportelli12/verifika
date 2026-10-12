@@ -1,0 +1,139 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://raw.githubusercontent.com/alexportelli12/verifika/main/schemas/verifika.schema.json",
+  "title": "Verifika configuration",
+  "description": "Configuration for verifika, the deterministic repository verification CLI. https://github.com/alexportelli12/verifika",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "checks"],
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "JSON schema reference for editor support."
+    },
+    "version": {
+      "const": 1,
+      "description": "Configuration format version. Must be 1."
+    },
+    "defaults": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Run-wide defaults. Command-line flags override these.",
+      "properties": {
+        "concurrency": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 64,
+          "description": "Maximum number of checks running at once. Default: 1 (sequential). Raise it only for checks that do not write shared outputs."
+        },
+        "timeoutMs": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647,
+          "description": "Default per-check timeout in milliseconds. A check that exceeds it is killed and fails. Default: 600000 (10 minutes)."
+        },
+        "failFast": {
+          "type": "boolean",
+          "description": "Stop all checks after the first failure. Default: false (run every selected check and report all failures)."
+        },
+        "keepRuns": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000,
+          "description": "Number of recent runs whose logs are kept under .verifika/runs. Default: 10."
+        }
+      }
+    },
+    "changes": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "How changed files are detected for selective runs.",
+      "properties": {
+        "base": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S",
+          "description": "Git ref to compare against for selective runs. Files changed since merge-base(base, HEAD), plus uncommitted and untracked files, are considered changed. Default: \"HEAD\" (only uncommitted work)."
+        },
+        "invalidateAll": {
+          "$ref": "#/definitions/globs",
+          "description": "Glob patterns; if any changed file matches, every check runs. verifika.config.json is always included."
+        }
+      }
+    },
+    "checks": {
+      "type": "object",
+      "minProperties": 1,
+      "description": "Checks keyed by name. Names may contain letters, digits, '.', '_' and '-'.",
+      "propertyNames": {
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$",
+        "not": {
+          "pattern": "^([Cc][Oo][Nn]|[Pp][Rr][Nn]|[Aa][Uu][Xx]|[Nn][Uu][Ll]|[Cc][Oo][Mm][0-9]|[Ll][Pp][Tt][0-9])(\\..*)?$"
+        }
+      },
+      "additionalProperties": {
+        "$ref": "#/definitions/check"
+      }
+    }
+  },
+  "definitions": {
+    "globs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "^(?!/)(?![A-Za-z]:)[^\\\\]*$"
+      },
+      "description": "Glob patterns relative to the config directory, using forward slashes. Supports *, **, ?, [abc] and {a,b}. Matching is case-sensitive and includes dotfiles."
+    },
+    "check": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["command"],
+      "properties": {
+        "command": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S",
+          "description": "Shell command to run from the config directory (sh on POSIX, cmd.exe on Windows). Exit code 0 means the check passed."
+        },
+        "paths": {
+          "allOf": [{ "$ref": "#/definitions/globs" }, { "minItems": 1 }],
+          "description": "Run this check only when a changed file matches one of these globs. Omit to run it whenever any file changed."
+        },
+        "exclude": {
+          "$ref": "#/definitions/globs",
+          "description": "Changed files matching these globs never select this check."
+        },
+        "always": {
+          "type": "boolean",
+          "description": "Run this check on every run, even when nothing changed. Cannot be combined with paths or exclude."
+        },
+        "dependsOn": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1 },
+          "description": "Checks that must pass before this one starts. Selecting this check also selects them."
+        },
+        "timeoutMs": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647,
+          "description": "Timeout for this check in milliseconds, overriding defaults.timeoutMs."
+        }
+      },
+      "not": {
+        "anyOf": [
+          {
+            "required": ["always", "paths"],
+            "properties": { "always": { "const": true } }
+          },
+          {
+            "required": ["always", "exclude"],
+            "properties": { "always": { "const": true }, "exclude": { "minItems": 1 } }
+          }
+        ]
+      }
+    }
+  }
+}

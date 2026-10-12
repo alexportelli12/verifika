@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: ${{ matrix.os }} / Node ${{ matrix.node }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        node: [22, 24]
+        include:
+          - os: ubuntu-latest
+            node: 26
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      - run: npm ci
+      # Verifika verifies itself: format, lint, typecheck, build, tests, skill, packaged install.
+      - run: npm run verify -- --mode human
+      - name: Show failed check logs
+        if: failure()
+        run: node src/cli.ts logs --failed --tail 200
+
+  # Single status for branch protection, independent of the matrix shape.
+  ci-ok:
+    name: CI passed
+    if: always()
+    needs: verify
+    runs-on: ubuntu-latest
+    steps:
+      - run: test "${{ needs.verify.result }}" = "success"
