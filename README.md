@@ -47,14 +47,16 @@ Paste this prompt into Claude Code, Codex, OpenCode or another coding agent, fro
 ```text
 Set up Verifika (https://github.com/alexportelli12/verifika) in this repository.
 
-1. Check that Node.js is 22.13 or newer. Install Verifika as a dev dependency with
-   this repository's package manager (npm install --save-dev verifika, or the
-   pnpm/yarn equivalent). It provides the `vfk` command.
+1. Check that Node.js is 22.13 or newer, and install the project's dependencies if
+   they are missing. Install Verifika as a dev dependency with this repository's
+   package manager (npm install --save-dev verifika, or the pnpm/yarn equivalent).
+   It provides the `vfk` command.
 2. Run `npx vfk init` to create verifika.config.json, then refine it by reading
    package.json, the CI workflows and the tool configs:
-   - One check per real quality gate (format, lint, typecheck, unit tests, build).
-     Every command must be non-interactive and exit on its own: no watch mode,
-     no prompts, no dev servers.
+   - One check per quality gate the project actually has (such as format, lint,
+     typecheck, unit tests, build). Do not invent checks for tools it does not use,
+     or add a check that another one already fully covers. Every command must be
+     non-interactive and exit on its own: no watch mode, no prompts, no dev servers.
    - Give each check `paths` globs for the files that can affect it, so local runs
      select only what a change needs. If unsure, leave `paths` out: the check then
      runs on every change.
@@ -63,17 +65,18 @@ Set up Verifika (https://github.com/alexportelli12/verifika) in this repository.
    - If package.json has no "verify" script, add "verify": "vfk --all".
    Reference: https://github.com/alexportelli12/verifika/blob/main/docs/configuration.md
 3. Validate the config:
-   - Touch one source file and one documentation file, run `npx vfk plan`, and explain
-     why each check was selected or skipped. Then revert both files.
    - Run `npx vfk --all`. If a check fails, decide whether the config is wrong (fix it)
      or the project already fails that check (report it; do not fix it).
+   - Run `npx vfk plan`. Until this setup is committed, the changed package.json and
+     lockfile select every check; that is expected. Explain which checks a typical
+     source edit and a documentation-only edit would select once it is committed.
 4. Install the agent skill: copy node_modules/verifika/skills/verifika into this
    agent's skills directory (see
    https://github.com/alexportelli12/verifika/blob/main/docs/agents.md).
 
 Do not change source code or existing scripts to make checks pass, and do not commit.
-Finish with: the checks you configured, the plan results, the --all result, and any
-existing failures you found.
+Finish with: the checks you configured and why, the --all result, the expected
+selection for those two edits, and any existing failures you found.
 ```
 
 Review the config it writes before committing it: the commands in it run on every verification.
