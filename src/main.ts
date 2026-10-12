@@ -145,6 +145,7 @@ export async function main(argv: string[], io: Io): Promise<number> {
           failed: Boolean(values.failed),
           ...(values.run !== undefined ? { runId: values.run as string } : {}),
           ...(values.tail !== undefined ? { tail: integerOption(values.tail, "--tail", 1) } : {}),
+          stripAnsi: !io.isTTY,
         },
         io,
       );
@@ -227,7 +228,7 @@ async function runInit(io: Io, values: Values): Promise<number> {
   const { file, checks } = await initConfig(root, Boolean(values.force));
   io.out(`Created ${path.relative(io.cwd, file) || file} with checks: ${checks.join(", ")}\n`);
   io.out(
-    'Review the commands, add "paths" to checks that only some files affect, then run: verifika plan\n',
+    'Review the commands, add "paths" to checks that only some files affect, format the file if your repository checks formatting, then run: verifika plan\n',
   );
   return ExitCode.Passed;
 }

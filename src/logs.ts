@@ -1,9 +1,11 @@
 import { createReadStream } from "node:fs";
+import { createInterface } from "node:readline";
 import { open } from "node:fs/promises";
 import path from "node:path";
 import { VerifikaError } from "./errors.ts";
 import { duration, isFailureStatus, selectionLabel, type Output } from "./reporters/reporter.ts";
 import { plain, symbol } from "./reporters/human.ts";
+import { stripAnsi } from "./preview.ts";
 import { readRun } from "./runs.ts";
 import type { CheckResult, RunResult } from "./types.ts";
 
@@ -13,6 +15,8 @@ export interface LogsRequest {
   checks: string[];
   failed: boolean;
   tail?: number;
+  /** Remove terminal colour codes some tools emit even when piped (default when not on a TTY). */
+  stripAnsi?: boolean;
 }
 
 /**
@@ -53,7 +57,7 @@ export async function showLogs(request: LogsRequest, output: Output): Promise<nu
       output.out(`${check.name} has no log: ${check.status} (${check.reason})\n`);
       continue;
     }
-    await printLog(path.join(request.root, check.log), request.tail, output);
+    await printLog(path.join(request.root, check.log), request, output);
   }
   return 0;
 }
@@ -65,26 +69,45 @@ export function renderRunSummary(run: RunResult): string {
   ];
   if (run.status === "running")
     lines.push("This run has not finished (or the process was killed).");
-  const width = Math.max(...run.checks.map((check) => check.name.length));
-  for (const check of run.checks) {
+  const ran = run.checks.filter((check) => check.selected);
+  const width = Math.max(0, ...ran.map((check) => check.name.length));
+  for (const check of ran) {
     const parts = [`  ${symbol(check.status, plain)} ${check.name.padEnd(width)}`];
-    if (!check.selected) {
-      parts.push(`skipped: ${check.reason}`);
-    } else {
-      parts.push(duration(check.durationMs).padStart(6));
-      if (check.status !== "passed") parts.push(check.reason);
-      if (check.log) parts.push(check.log);
-    }
+    parts.push(duration(check.durationMs).padStart(6));
+    if (check.status !== "passed") parts.push(check.reason);
+    if (check.log) parts.push(check.log);
     lines.push(parts.join("  "));
+  }
+  // One line for everything not selected; large configs would otherwise list dozens.
+  const skipped = run.checks.filter((check) => !check.selected);
+  if (skipped.length > 0) {
+    const reasons = [...new Set(skipped.map((check) => check.reason))].join("; ");
+    lines.push(
+      `  – skipped (${skipped.length}): ${skipped.map((check) => check.name).join(", ")} (${reasons})`,
+    );
   }
   return `${lines.join("\n")}\n`;
 }
 
-async function printLog(file: string, tail: number | undefined, output: Output): Promise<void> {
+async function printLog(
+  file: string,
+  { tail, stripAnsi: strip = false }: LogsRequest,
+  output: Output,
+): Promise<void> {
   try {
     if (tail !== undefined) {
       const text = await readTail(file, tail);
-      output.out(text.endsWith("\n") || text === "" ? text : `${text}\n`);
+      const shown = strip ? stripAnsi(text) : text;
+      output.out(shown.endsWith("\n") || shown === "" ? shown : `${shown}\n`);
+      return;
+    }
+    if (strip) {
+      // Line by line, so an escape sequence is never split across chunks.
+      const lines = createInterface({
+        input: createReadStream(file, { encoding: "utf8" }),
+        crlfDelay: Infinity,
+      });
+      for await (const line of lines) output.out(`${stripAnsi(line)}\n`);
       return;
     }
     let last = "";

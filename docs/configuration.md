@@ -103,6 +103,16 @@ Checks run with piped (non-TTY) output, so most tools disable colours and intera
 
 `dependsOn` expresses "must pass before". It does not mean "rerun when the dependency's files change": if `build` is selected, `e2e` is not selected because of it. If a dependency fails, its dependents are reported `blocked` and count as not passed.
 
+### Checks that share outputs
+
+Independent checks run at the same time. Checks that write the same files must not: for example a `build` that deletes and recreates `dist/` while another check reads `dist/`, or two scripts that both restage a shared vendor directory. Running them concurrently produces real but misleading failures (missing modules, crashed browsers). Verifika reports these as failures, never as passes, but they waste time.
+
+Version 1 has no per-check lock. Choose one of:
+
+- `dependsOn`, when one check genuinely needs the other's output first (it also pulls the dependency into selective runs and blocks on its failure);
+- `"defaults": { "concurrency": 1 }`, when many scripts share build state; the run is sequential but keeps selection, timeouts and compact output;
+- restructuring the scripts so each check builds into its own output directory.
+
 ## Glob syntax
 
 Globs use forward slashes on every platform and are matched against paths relative to the project root.

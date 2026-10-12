@@ -19,4 +19,10 @@ First stable release.
 - Agent skill (`skills/verifika/SKILL.md`) for Claude Code, Codex, OpenCode and other agents.
 - Distributed as a prebuilt package tarball attached to the GitHub release (not yet on the npm registry).
 
+### Known limitations
+
+- No per-check lock: checks that write shared outputs need `dependsOn` or `concurrency: 1` (see the configuration reference).
+- Leftover background processes cannot be reaped on Windows once a check's main process has exited, or on POSIX when they leave the process group; Verifika reports them as a check warning.
+- Not yet published to the npm registry.
+
 [1.0.0]: https://github.com/alexportelli12/verifika/releases/tag/v1.0.0

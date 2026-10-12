@@ -301,6 +301,78 @@ describe("OutputCapture", () => {
     expect(capture.preview()).toEqual(["src/a.ts(1,1): error TS1: x"]);
   });
 
+  it("collapses Karma-style progress redraws and keeps the assertion message", () => {
+    const capture = new OutputCapture(10);
+    const progress = (n: number) =>
+      `\u001b[1A\u001b[2KChrome Headless: Executed ${n} of 756 (1 FAILED)\n`;
+    capture.write("out", "Chrome Headless: Executed 0 of 756\n");
+    capture.write(
+      "out",
+      "Chrome Headless AppTitleStrategy falls back to the application name FAILED\n",
+    );
+    capture.write("out", "\tExpected 'Acme Admin' to be 'Wrong Title'.\n");
+    capture.write("out", "\t    at <Jasmine>\n");
+    for (let n = 397; n < 420; n++) capture.write("out", progress(n));
+    capture.write("out", "Chrome Headless: Executed 756 of 756 (1 FAILED) (16.5 secs)\n");
+    expect(capture.preview()).toEqual([
+      "Chrome Headless AppTitleStrategy falls back to the application name FAILED",
+      "\tExpected 'Acme Admin' to be 'Wrong Title'.",
+      "Chrome Headless: Executed 756 of 756 (1 FAILED) (16.5 secs)",
+    ]);
+  });
+
+  it("prefers failed-test markers over exceptions logged by passing tests", () => {
+    const capture = new OutputCapture(10);
+    for (let i = 0; i < 12; i++) {
+      capture.write("out", "ERROR: 'Optimisation task failed', Error: fails\n");
+      capture.write("out", "Error: Provider unavailable\n");
+    }
+    capture.write(
+      "out",
+      "Chrome Headless AppTitleStrategy falls back to the application name FAILED\n",
+    );
+    capture.write("out", "\tExpected 'Acme Admin' to be 'Wrong Title'.\n");
+    expect(capture.preview()).toEqual([
+      "Chrome Headless AppTitleStrategy falls back to the application name FAILED",
+      "\tExpected 'Acme Admin' to be 'Wrong Title'.",
+    ]);
+  });
+
+  it("keeps only the latest state of a progress line interleaved with other output", () => {
+    const capture = new OutputCapture(10);
+    capture.write("out", "Chrome: Executed 387 of 756 (1 FAILED) (9.02 secs)\n");
+    capture.write("out", "LOG: 'something'\n");
+    capture.write("out", "Chrome: Executed 438 of 756 (1 FAILED) (13.7 secs)\n");
+    capture.write("out", "TOTAL: 1 FAILED, 755 SUCCESS\n");
+    expect(capture.preview()).toEqual([
+      "Chrome: Executed 438 of 756 (1 FAILED) (13.7 secs)",
+      "TOTAL: 1 FAILED, 755 SUCCESS",
+    ]);
+  });
+
+  it("keeps distinct compiler errors that differ only in line numbers", () => {
+    const capture = new OutputCapture(10);
+    capture.write("out", "src/a.ts(3,7): error TS2322: Type 'string' is not assignable.\n");
+    capture.write("out", "src/a.ts(9,7): error TS2322: Type 'string' is not assignable.\n");
+    expect(capture.preview()).toHaveLength(2);
+  });
+
+  it("ranks real assertion failures above structured logs that mention errors", () => {
+    const capture = new OutputCapture(5);
+    for (let i = 0; i < 20; i++) {
+      capture.write(
+        "out",
+        `{"status":"error","isFallback":true,"message":"Build bundle session ${i}"}\n`,
+      );
+    }
+    capture.write("out", " FAIL  src/matcher-batch.spec.ts > matches items\n");
+    capture.write("out", "AssertionError: expected 'item-6' to be 'item-WRONG'\n");
+    expect(capture.preview()).toEqual([
+      " FAIL  src/matcher-batch.spec.ts > matches items",
+      "AssertionError: expected 'item-6' to be 'item-WRONG'",
+    ]);
+  });
+
   it("falls back to the last lines when nothing looks like a failure", () => {
     const capture = new OutputCapture(2);
     capture.write("out", "one\ntwo\nthree\n[warn] src/a.ts\n");

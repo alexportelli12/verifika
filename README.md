@@ -73,6 +73,8 @@ Or write `verifika.config.json` yourself:
 }
 ```
 
+If your repository checks the formatting of every file (for example `prettier --check .`), format the new `verifika.config.json` too.
+
 Then:
 
 ```sh

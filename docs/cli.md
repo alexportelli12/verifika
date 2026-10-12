@@ -41,6 +41,8 @@ See [change detection semantics](configuration.md#change-detection-semantics).
 | `--tail <lines>`              | Print only the last lines of each log.                                          |
 | `--run <id>`                  | Read that run instead of the latest.                                            |
 
+Logs are stored exactly as the command printed them. When `verifika logs` writes to a pipe or file (as it does for agents), it strips terminal colour codes that some tools emit even when not attached to a terminal; on an interactive terminal they are kept.
+
 ## Output (`--mode`)
 
 `human`, `agent`, `json` or `quiet`. Default: `human` when stdout is a terminal, otherwise `agent`. The `VERIFIKA_MODE` environment variable sets the default. `human` mode uses colour on a terminal unless `NO_COLOR` is set (`FORCE_COLOR` enables it elsewhere).
@@ -60,7 +62,7 @@ build: timed out after 5m00s
 Run: verifika logs --failed
 ```
 
-The first line is `PASS`, `FAIL` or `INTERRUPTED`, then `passed/selected`, total duration and what was selected. Each selected check that did not pass gets one line. Up to three failed checks get a preview of at most `--preview` lines: lines that look like errors (with the file heading above them, for tools like ESLint), or the last lines of output when nothing looks like an error. Package-manager boilerplate (`npm error ...`) is left out. Previews are ANSI-stripped and each line is capped at 200 characters.
+The first line is `PASS`, `FAIL` or `INTERRUPTED`, then `passed/selected`, total duration and what was selected. Each selected check that did not pass gets one line. Up to three failed checks get a preview of at most `--preview` lines, chosen in this order: lines that clearly state a failure (assertion errors, compiler errors such as `error TS2322`, `FAIL`/`FAILED` markers) plus the line after each; otherwise lines that mention errors (with the file heading above them, for tools like ESLint); otherwise the last lines of output. Progress output that redraws itself (for example Karma's `Executed 12 of 756`) is collapsed to its final state, and JSON log lines are not treated as failures. Package-manager boilerplate (`npm error ...`) is left out. Previews are ANSI-stripped and each line is capped at 200 characters.
 
 When nothing is selected:
 

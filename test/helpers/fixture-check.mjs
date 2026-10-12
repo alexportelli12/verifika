@@ -57,6 +57,11 @@ switch (action) {
     process.exitCode = 1;
     break;
   }
+  case "color":
+    // Tools such as the Angular CLI force colour even when piped.
+    process.stdout.write("\u001b[31merror\u001b[39m: \u001b[1mbroken\u001b[22m\n");
+    process.exitCode = 1;
+    break;
   case "env":
     process.stdout.write(
       `${process.env.VERIFIKA} ${process.env.VERIFIKA_CHECK} ${process.env.VERIFIKA_RUN_ID}\n`,

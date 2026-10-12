@@ -407,7 +407,7 @@ describe("verifika logs", () => {
     expect(summary.code).toBe(0);
     expect(summary.stdout).toMatch(/^Run \d{8}-\d{6}-\d{3}-[0-9a-f]{6} · failed/);
     expect(summary.stdout).toMatch(/✗ typecheck .*exit 2 {2}\.verifika\/runs\/.*\/typecheck\.log/);
-    expect(summary.stdout).toContain("docs       skipped: no matching changes");
+    expect(summary.stdout).toContain("– skipped (1): docs (no matching changes)");
 
     const one = await runCli(root, ["logs", "typecheck"]);
     expect(one.stdout).toBe("starting up\nnoise line\nsrc/app.ts(3,7): error TS2322: bad\n");
@@ -429,6 +429,14 @@ describe("verifika logs", () => {
     const unknown = await runCli(root, ["logs", "nope"]);
     expect(unknown.code).toBe(2);
     expect(unknown.stderr).toContain("no check named nope");
+  });
+
+  it("strips forced colour codes from logs printed to a pipe", async () => {
+    const root = project({ build: { command: "node check.mjs color" } });
+    const run = await runCli(root, ["--all"]);
+    expect(run.stdout).toContain("build: exit 1\n  error: broken\n");
+    expect((await runCli(root, ["logs", "build"])).stdout).toBe("error: broken\n");
+    expect((await runCli(root, ["logs", "build", "--tail", "5"])).stdout).toBe("error: broken\n");
   });
 
   it("reads a specific run and keeps only the configured number of runs", async () => {
