@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
-import { existsSync } from "node:fs";
-import { mkdir, readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 import { VerifikaError } from "./errors.ts";
 import type { RunResult } from "./types.ts";
@@ -9,7 +9,20 @@ export const STATE_DIR = ".verifika";
 const RUNS_DIR = "runs";
 const LATEST_FILE = "latest";
 const RESULT_FILE = "run.json";
+/** Present while a run is in progress; names the process that owns it. */
+const OWNER_FILE = "owner.json";
+const TEMP_PREFIX = ".tmp-";
 const RUN_ID_PATTERN = /^\d{8}-\d{6}-\d{3}-[0-9a-f]{6}$/;
+/** Owners on another host cannot be checked; trust their runs as active for this long. */
+const FOREIGN_OWNER_GRACE_MS = 24 * 60 * 60 * 1000;
+/** Half-created run directories older than this were abandoned by a crashed process. */
+const ABANDONED_TEMP_MS = 60 * 60 * 1000;
+
+interface Owner {
+  pid: number;
+  host: string;
+  startedAt: string;
+}
 
 /**
  * Unique run identifier that sorts chronologically to the millisecond, e.g.
@@ -31,76 +44,139 @@ export function logPath(runId: string, check: string): string {
 }
 
 /**
- * Creates the run directory and makes the state directory self-ignoring, so
- * Verifika never needs an entry in the repository's own .gitignore and its
- * logs never show up as changed files.
+ * Creates a new run directory and returns its id. The directory is assembled
+ * under a temporary name (with its initial `run.json` and an owner record) and
+ * renamed into place, so other Verifika processes never see a run without them.
+ * The state directory ignores itself in git, so logs never count as changes.
  */
-export async function prepareRun(root: string, runId: string): Promise<string> {
+export async function createRun(
+  root: string,
+  initial: (runId: string) => RunResult,
+): Promise<string> {
   const stateDir = path.join(root, STATE_DIR);
-  const directory = runDirectory(root, runId);
+  const runsDir = path.join(stateDir, RUNS_DIR);
   try {
-    await mkdir(directory, { recursive: true });
-    const ignore = path.join(stateDir, ".gitignore");
-    if (!existsSync(ignore))
-      await writeFile(ignore, "# Created by verifika; run logs stay local.\n*\n");
+    await mkdir(runsDir, { recursive: true });
+    await writeFile(
+      path.join(stateDir, ".gitignore"),
+      "# Created by verifika; run logs stay local.\n*\n",
+      {
+        flag: "wx",
+      },
+    ).catch((error: NodeJS.ErrnoException) => {
+      if (error.code !== "EEXIST") throw error;
+    });
+    for (let attempt = 0; ; attempt++) {
+      const runId = createRunId();
+      const temporary = path.join(runsDir, `${TEMP_PREFIX}${runId}`);
+      await mkdir(temporary);
+      const owner: Owner = {
+        pid: process.pid,
+        host: os.hostname(),
+        startedAt: new Date().toISOString(),
+      };
+      await writeFile(path.join(temporary, OWNER_FILE), `${JSON.stringify(owner)}\n`);
+      await writeFile(
+        path.join(temporary, RESULT_FILE),
+        `${JSON.stringify(initial(runId), null, 2)}\n`,
+      );
+      try {
+        await rename(temporary, runDirectory(root, runId));
+        return runId;
+      } catch (error) {
+        await rm(temporary, { recursive: true, force: true });
+        if (attempt >= 4) throw error;
+      }
+    }
   } catch (error) {
-    throw new VerifikaError(`cannot create ${STATE_DIR}/ in ${root}: ${(error as Error).message}`);
+    throw new VerifikaError(`cannot create a run in ${stateDir}: ${(error as Error).message}`);
   }
-  return directory;
 }
 
 export async function writeRunResult(root: string, result: RunResult): Promise<void> {
   const directory = runDirectory(root, result.runId);
+  // Recreate the directory if something removed it; never lose the final result.
+  await mkdir(directory, { recursive: true });
   await writeAtomic(path.join(directory, RESULT_FILE), `${JSON.stringify(result, null, 2)}\n`);
+}
+
+/** Marks a run as finished, which makes it eligible for retention. */
+export async function releaseRun(root: string, runId: string): Promise<void> {
+  await rm(path.join(runDirectory(root, runId), OWNER_FILE), { force: true });
 }
 
 export async function markLatest(root: string, runId: string): Promise<void> {
   await writeAtomic(path.join(root, STATE_DIR, LATEST_FILE), `${runId}\n`);
 }
 
-/** Runs younger than this that are still `running` belong to a concurrent process; never prune them. */
-const ACTIVE_RUN_GRACE_MS = 6 * 60 * 60 * 1000;
+export async function readLatest(root: string): Promise<string | null> {
+  try {
+    const id = (await readFile(path.join(root, STATE_DIR, LATEST_FILE), "utf8")).trim();
+    return RUN_ID_PATTERN.test(id) ? id : null;
+  } catch {
+    return null;
+  }
+}
 
-/** Keeps the newest `keep` runs, never deleting `current` or another run still in progress. */
+/**
+ * Keeps the newest `keep` finished runs. Never deletes `current` or any run whose
+ * owning process is still alive, so concurrent invocations cannot remove each
+ * other's logs. Also clears half-created directories abandoned by crashes.
+ */
 export async function pruneRuns(root: string, keep: number, current: string): Promise<void> {
   const directory = path.join(root, STATE_DIR, RUNS_DIR);
-  let entries: string[];
+  let names: string[];
   try {
-    entries = (await readdir(directory)).filter((name) => RUN_ID_PATTERN.test(name)).sort();
+    names = await readdir(directory);
   } catch {
     return;
   }
-  const candidates = entries
+  const runs = names.filter((name) => RUN_ID_PATTERN.test(name)).sort();
+  const candidates = runs
     .filter((name) => name !== current)
-    .slice(0, Math.max(0, entries.length - keep));
-  const excess: string[] = [];
+    .slice(0, Math.max(0, runs.length - keep));
+  const doomed: string[] = [];
   for (const name of candidates) {
-    if (!(await isActiveRun(path.join(directory, name)))) excess.push(name);
+    if (!(await isActiveRun(path.join(directory, name)))) doomed.push(name);
+  }
+  for (const name of names.filter((entry) => entry.startsWith(TEMP_PREFIX))) {
+    const info = await stat(path.join(directory, name)).catch(() => null);
+    if (info && Date.now() - info.mtimeMs > ABANDONED_TEMP_MS) doomed.push(name);
   }
   await Promise.all(
-    excess.map((name) =>
+    doomed.map((name) =>
       rm(path.join(directory, name), { recursive: true, force: true }).catch(() => undefined),
     ),
   );
 }
 
 async function isActiveRun(directory: string): Promise<boolean> {
+  let owner: Owner;
   try {
-    const run = JSON.parse(await readFile(path.join(directory, RESULT_FILE), "utf8")) as RunResult;
-    return run.status === "running" && Date.now() - Date.parse(run.startedAt) < ACTIVE_RUN_GRACE_MS;
-  } catch {
-    return false;
+    owner = JSON.parse(await readFile(path.join(directory, OWNER_FILE), "utf8")) as Owner;
+  } catch (error) {
+    // No owner record: the run finished (or its directory is unreadable; leave it alone).
+    return (error as NodeJS.ErrnoException).code !== "ENOENT";
+  }
+  if (owner.host !== os.hostname()) {
+    return Date.now() - Date.parse(owner.startedAt) < FOREIGN_OWNER_GRACE_MS;
+  }
+  return isProcessAlive(owner.pid);
+}
+
+function isProcessAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code === "EPERM";
   }
 }
 
 export async function readRun(root: string, runId?: string): Promise<RunResult> {
-  let id = runId;
-  if (id === undefined) {
-    try {
-      id = (await readFile(path.join(root, STATE_DIR, LATEST_FILE), "utf8")).trim();
-    } catch {
-      throw new VerifikaError("no verification runs recorded yet", "Run `verifika` first.");
-    }
+  const id = runId ?? (await readLatest(root));
+  if (id === null) {
+    throw new VerifikaError("no verification runs recorded yet", "Run `verifika` first.");
   }
   if (!RUN_ID_PATTERN.test(id)) throw new VerifikaError(`invalid run id "${id}"`);
   try {
@@ -115,14 +191,23 @@ export async function readRun(root: string, runId?: string): Promise<RunResult> 
   }
 }
 
+/** Writes via a uniquely named temporary file and rename, so readers never see partial content. */
 async function writeAtomic(file: string, content: string): Promise<void> {
   const temporary = `${file}.${process.pid}.${randomBytes(3).toString("hex")}.tmp`;
   await writeFile(temporary, content);
-  try {
-    await rename(temporary, file);
-  } catch {
-    // Windows refuses to replace a file another process has open; fall back to a plain write.
-    await writeFile(file, content);
-    await rm(temporary, { force: true });
+  for (let attempt = 0; ; attempt++) {
+    try {
+      await rename(temporary, file);
+      return;
+    } catch {
+      // Windows refuses to replace a file another process is reading; retry briefly,
+      // then write in place rather than lose the content.
+      if (attempt >= 9) {
+        await writeFile(file, content);
+        await rm(temporary, { force: true });
+        return;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 20 * (attempt + 1)));
+    }
   }
 }

@@ -19,28 +19,28 @@ Neither project had failing checks at the tested commits (4/4 and 25/25 passed w
 - Check selection matched the configuration's intent in all 20 probes: source, spec, stylesheet, template and documentation edits, untracked files, renames (both paths counted), and `package.json` (global invalidation). For example, in the monorepo a change in a shared package selected the 13 dependent checks, and a documentation change selected only `format`.
 - `--changed-since main` on a feature branch selected checks from the branch commit plus an uncommitted edit; an unknown ref exited 2 with a hint.
 - `--fail-fast` cancelled the remaining checks after the first failure (11 s instead of 18 s).
-- Running the monorepo's 25 checks at `-j 4` produced genuine race failures: several scripts delete and rebuild shared `dist/` and vendor directories. Verifika reported them as failures, never as passes. That project uses `"concurrency": 1`; see [checks that share outputs](configuration.md#checks-that-share-outputs).
+- Running the monorepo's 25 checks at `-j 4` produced genuine race failures: several scripts delete and rebuild shared `dist/` and vendor directories. Verifika reported them as failures, never as passes. That project runs sequentially; see [checks that share outputs](configuration.md#checks-that-share-outputs).
 
 ## Wall-clock time
 
 Angular admin app, 3 interleaved rounds:
 
-| Runner                                | Median | Range       |
-| ------------------------------------- | ------ | ----------- |
-| previous runner (sequential)          | 95.5 s | 90.3–97.3 s |
-| `verifika --all` (default, 4 at once) | 61.7 s | 61.6–61.7 s |
-| `verifika --all -j 1`                 | 94.6 s | 92.5–95.9 s |
+| Runner                       | Median | Range       |
+| ---------------------------- | ------ | ----------- |
+| previous runner (sequential) | 95.5 s | 90.3–97.3 s |
+| `verifika --all -j 4`        | 61.7 s | 61.6–61.7 s |
+| `verifika --all -j 1`        | 94.6 s | 92.5–95.9 s |
 
-Running independent checks concurrently cut this project's full run by 34%. Run one at a time, Verifika takes the same time as the previous runner, within noise.
+Running its independent checks four at a time (they share no build outputs) cut this project's full run by 34%. Concurrency is opt-in: the default is sequential. Run one at a time, Verifika takes the same time as the previous runner, within noise.
 
 Monorepo, a single round:
 
-| Runner                              | Time    |
-| ----------------------------------- | ------- |
-| previous runner (sequential)        | 223.0 s |
-| `verifika --all` (`concurrency: 1`) | 221.9 s |
+| Runner                        | Time    |
+| ----------------------------- | ------- |
+| previous runner (sequential)  | 223.0 s |
+| `verifika --all` (sequential) | 221.9 s |
 
-Here Verifika runs sequentially by configuration, so the times match. The gain on this project comes from selective runs: a typical edit runs 1–13 of the 25 checks instead of all of them.
+Here Verifika runs sequentially, because several checks rebuild shared outputs, so the times match. The gain on this project comes from selective runs: a typical edit runs 1–13 of the 25 checks instead of all of them.
 
 ## Startup overhead
 

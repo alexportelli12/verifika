@@ -20,7 +20,7 @@ Look for `verifika.config.json` in the repository root (or the package directory
    verifika
    ```
 
-   Runs only the checks matching files changed since the configured `changes.base` (by default `HEAD`: your uncommitted and untracked changes).
+   Runs only the checks matching files changed since the configured `changes.base` (by default `HEAD`: your uncommitted and untracked changes). If the environment sets `CI` (some agent sandboxes do), plain `verifika` runs everything; use `verifika --changed` for a selective run there.
 
 2. **To see what would run and why**, without running anything:
 
@@ -70,7 +70,7 @@ Run: verifika logs typecheck
 | 128+n     | Interrupted by a signal (130 SIGINT, 143 SIGTERM): nothing conclusive  |
 | 70        | Internal Verifika error: nothing conclusive; report it                 |
 
-Check statuses: `passed`, `failed`, `timed_out`, `error` (could not start), `blocked` (a dependency did not pass), `cancelled` (fail-fast stopped it), `interrupted`, and `skipped` (not selected for this run, so **not verified**).
+Check statuses: `passed`, `failed`, `timed_out`, `error` (could not start, or left processes that could not be cleaned up), `blocked` (a dependency did not pass), `cancelled` (fail-fast stopped it), `interrupted`, and `skipped` (not selected for this run, so **not verified**).
 
 ## When verification fails
 
@@ -88,4 +88,5 @@ Check statuses: `passed`, `failed`, `timed_out`, `error` (could not start), `blo
 - Do not read logs of passing checks or use `verifika logs` after a `PASS`; there is nothing to diagnose.
 - Do not edit `verifika.config.json`, remove checks, narrow `paths`, raise timeouts, or pass `--check` to dodge a failing check, unless the user asked for that change.
 - Exit code 2 is not a code failure: read the message (bad flag, unknown check, invalid config, missing git ref) and fix the invocation, or report it.
+- Do not raise concurrency (`-j`) beyond what the config sets: the project chose it, and checks that share build outputs fail spuriously when run together.
 - Prefer the default agent output. Use `verifika --mode json` only when a script needs structured results; avoid `verifika --mode human` in agent sessions.

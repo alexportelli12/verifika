@@ -24,7 +24,7 @@
           "type": "integer",
           "minimum": 1,
           "maximum": 64,
-          "description": "Maximum number of checks running at once. Default: half the CPU cores, between 1 and 4."
+          "description": "Maximum number of checks running at once. Default: 1 (sequential). Raise it only for checks that do not write shared outputs."
         },
         "timeoutMs": {
           "type": "integer",

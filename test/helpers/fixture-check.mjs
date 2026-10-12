@@ -2,7 +2,7 @@
 // repository and invoked as `node check.mjs <action> ...` so commands need no
 // shell-specific quoting on any platform.
 import { spawn } from "node:child_process";
-import { appendFileSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, writeFileSync } from "node:fs";
 
 const [action, ...args] = process.argv.slice(2);
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -39,6 +39,25 @@ switch (action) {
   case "orphan": {
     // orphan <pidfile>: leaves a background grandchild holding stdout, then exits 0.
     const child = spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)"], {
+      stdio: ["ignore", "inherit", "inherit"],
+    });
+    writeFileSync(args[0], String(child.pid));
+    child.unref();
+    break;
+  }
+  case "stubborn": {
+    // stubborn <pidfile>: leaves a grandchild that ignores SIGTERM and does not hold
+    // the output pipes, then exits 0. Only an explicit kill can stop it.
+    const script = `process.on("SIGTERM", () => {}); require("fs").writeFileSync(${JSON.stringify(args[0])}, String(process.pid)); setInterval(() => {}, 1000);`;
+    spawn(process.execPath, ["-e", script], { stdio: "ignore" }).unref();
+    while (!existsSync(args[0])) await sleep(20);
+    break;
+  }
+  case "escape": {
+    // escape <pidfile>: leaves a grandchild in a new session/process group that keeps
+    // the output pipes open, then exits 0.
+    const child = spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)"], {
+      detached: true,
       stdio: ["ignore", "inherit", "inherit"],
     });
     writeFileSync(args[0], String(child.pid));

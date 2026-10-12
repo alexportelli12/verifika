@@ -78,10 +78,8 @@ export interface CheckResult {
   log: string | null;
   /** Short excerpt of failing output, ANSI-stripped and bounded. */
   preview: string[];
-  /** Spawn or internal error message. */
+  /** Why the check could not be started or its processes not cleaned up (status `error`). */
   error: string | null;
-  /** Non-fatal problem worth surfacing, e.g. a process that outlived the check. */
-  warning: string | null;
 }
 
 /** `running` is only ever on disk, for a run that has not finished (or crashed). */
@@ -105,6 +103,11 @@ export interface RunResult {
     changedFiles: ChangedFile[];
     invalidatedBy: string | null;
   };
+  /**
+   * Whether `verifika logs` (without `--run`) still shows this run. False when
+   * another run started in the same directory after this one.
+   */
+  latest: boolean;
   summary: {
     total: number;
     selected: number;

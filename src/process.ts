@@ -26,14 +26,19 @@ export type ExecOutcome = (
   | { kind: "aborted"; reason: unknown; durationMs: number; preview: string[] }
   | { kind: "spawn_error"; error: string; durationMs: number; preview: string[] }
 ) & {
-  /** Set when a descendant process outlived the check and could not be reaped. */
-  warning?: string;
+  /**
+   * Set when processes started by the check could not be confirmed terminated.
+   * The run must not count such a check as passed.
+   */
+  cleanupError?: string;
 };
 
 const isWindows = process.platform === "win32";
 /** Time a terminated process tree gets to exit before it is killed outright. */
 const TERMINATE_GRACE_MS = 2_000;
-/** Time to wait for output pipes to close after the command itself exited. */
+/** Time a killed process gets to disappear before Verifika stops waiting for it. */
+const KILL_WAIT_MS = 5_000;
+/** Time to wait for output pipes to close once the check's processes are gone. */
 const PIPE_DRAIN_MS = 2_000;
 
 const active = new Set<ChildProcess>();
@@ -49,10 +54,12 @@ export function killAllNow(): void {
  * interpolated into it.
  *
  * Output from stdout and stderr is streamed straight to `logFile`; only a small
- * bounded preview is kept in memory.
+ * bounded preview is kept in memory. After the command exits, any processes it
+ * left behind are terminated; if that cannot be confirmed, `cleanupError` is set.
  */
 export async function execCheck(options: ExecOptions): Promise<ExecOutcome> {
   const started = performance.now();
+  const spawnedAt = Date.now();
   const elapsed = () => Math.round(performance.now() - started);
   const capture = new OutputCapture(options.previewLines);
   const log = createWriteStream(options.logFile);
@@ -98,43 +105,45 @@ export async function execCheck(options: ExecOptions): Promise<ExecOutcome> {
     stream.on("end", () => capture.write(stream, decoder.end() + "\n"));
   }
 
+  type Result = { code: number | null; signal: string | null; error?: string; stuck?: boolean };
+  let giveUp: (result: Result) => void = () => undefined;
+  const resultPromise = new Promise<Result>((resolve) => {
+    giveUp = resolve;
+    child.once("error", (error) => resolve({ code: null, signal: null, error: error.message }));
+    child.once("exit", (code, signal) => resolve({ code, signal }));
+  });
+
   let timedOut = false;
   let abortReason: unknown;
   let terminating: Promise<void> | null = null;
   const terminate = () => {
-    terminating ??= terminateTree(child);
-    return terminating;
+    terminating ??= terminateTree(child).then((exited) => {
+      // Never hang the run on a process that survives SIGKILL (e.g. stuck in the kernel).
+      if (!exited) giveUp({ code: null, signal: null, stuck: true });
+    });
   };
   const timer = setTimeout(() => {
     timedOut = true;
-    void terminate();
+    terminate();
   }, options.timeoutMs);
   const onAbort = () => {
     abortReason = options.signal.reason;
-    void terminate();
+    terminate();
   };
   options.signal.addEventListener("abort", onAbort, { once: true });
 
-  const result = await new Promise<{ code: number | null; signal: string | null; error?: string }>(
-    (resolve) => {
-      child.once("error", (error) => resolve({ code: null, signal: null, error: error.message }));
-      child.once("exit", (code, signal) => resolve({ code, signal }));
-    },
-  );
+  const result = await resultPromise;
   clearTimeout(timer);
   options.signal.removeEventListener("abort", onAbort);
 
-  let warning: string | undefined;
-  if (result.error === undefined) {
-    // The shell has exited, but descendants may still hold the output pipes open.
-    // Reap the rest of the process group so nothing outlives the check.
-    if (!(await drainAndReap(child))) {
-      warning =
-        "a background process kept the output open after the command exited and may still be running";
-    }
+  let cleanupError: string | undefined;
+  if (result.error !== undefined) {
+    destroyOutput(child);
+  } else if (result.stuck) {
+    destroyOutput(child);
+    cleanupError = "the command did not exit after being killed";
   } else {
-    child.stdout?.destroy();
-    child.stderr?.destroy();
+    cleanupError = await reapLeftovers(child, spawnedAt);
   }
   active.delete(child);
   if (terminating) await terminating;
@@ -143,7 +152,7 @@ export async function execCheck(options: ExecOptions): Promise<ExecOutcome> {
 
   const preview = capture.preview();
   const durationMs = elapsed();
-  const extra = warning ? { warning } : {};
+  const extra = cleanupError ? { cleanupError } : {};
   if (result.error !== undefined)
     return { kind: "spawn_error", error: result.error, durationMs, preview };
   if (timedOut) return { kind: "timed_out", durationMs, preview, ...extra };
@@ -160,60 +169,171 @@ export async function execCheck(options: ExecOptions): Promise<ExecOutcome> {
 }
 
 /**
- * Waits for the output pipes to close, terminating the rest of the check's
- * process group on POSIX. Returns false when something outside the group (a
- * `setsid` daemon, or any leftover descendant on Windows, where the tree can no
- * longer be found once its root exited) still held the pipes.
+ * Terminates whatever the check left running after its main process exited and
+ * waits for its output pipes to close. Returns a description of what could not
+ * be cleaned up, or undefined when everything is confirmed gone.
+ *
+ * POSIX: every check runs in its own process group, so the group is signalled
+ * (SIGTERM, then SIGKILL) until it no longer exists. Windows: the tree cannot be
+ * walked from an exited root with taskkill, so descendants are found by parent
+ * process id and creation time, and killed.
  */
-async function drainAndReap(child: ChildProcess): Promise<boolean> {
-  const closed = new Promise<void>((resolve) => {
-    if (child.stdout?.closed !== false && child.stderr?.closed !== false) resolve();
-    else child.once("close", () => resolve());
-  });
-  if (!isWindows) signalGroup(child, "SIGTERM");
-  if (await settlesWithin(closed, PIPE_DRAIN_MS)) return true;
-  if (!isWindows) signalGroup(child, "SIGKILL");
-  if (await settlesWithin(closed, PIPE_DRAIN_MS)) return true;
-  // Something outside our reach still holds the pipes; stop reading them.
-  child.stdout?.destroy();
-  child.stderr?.destroy();
-  return false;
+async function reapLeftovers(child: ChildProcess, spawnedAt: number): Promise<string | undefined> {
+  const closed = outputClosed(child);
+  let failure: string | undefined;
+  if (child.pid !== undefined) {
+    if (isWindows) {
+      try {
+        await killWindowsDescendants(child.pid, spawnedAt);
+      } catch (error) {
+        failure = `could not inspect the process tree: ${(error as Error).message}`;
+      }
+    } else if (!(await stopGroup(child.pid))) {
+      failure = "processes in the check's process group survived SIGKILL";
+    }
+  }
+  if (!(await settlesWithin(closed, PIPE_DRAIN_MS))) {
+    destroyOutput(child);
+    failure ??= isWindows
+      ? "a process kept the check's output open and could not be stopped"
+      : "a process outside the check's process group (for example started with setsid) kept its output open";
+  }
+  return failure;
 }
 
-async function terminateTree(child: ChildProcess): Promise<void> {
+/** Terminates a still-running check. Resolves to whether its main process exited. */
+async function terminateTree(child: ChildProcess): Promise<boolean> {
   const exited = new Promise<void>((resolve) => {
     if (child.exitCode !== null || child.signalCode !== null) resolve();
     else child.once("exit", () => resolve());
   });
   await killTree(child, false);
-  if (await settlesWithin(exited, TERMINATE_GRACE_MS)) return;
+  if (await settlesWithin(exited, TERMINATE_GRACE_MS)) return true;
   await killTree(child, true);
+  return settlesWithin(exited, KILL_WAIT_MS);
 }
 
 async function killTree(child: ChildProcess, force: boolean): Promise<void> {
   if (child.pid === undefined) return;
-  if (isWindows) {
-    // taskkill /T walks the tree from the shell process; /F is required for console apps.
-    await new Promise<void>((resolve) => {
-      const killer = spawn("taskkill", ["/pid", String(child.pid), "/T", "/F"], {
-        stdio: "ignore",
-        windowsHide: true,
-      });
-      killer.once("error", () => resolve());
-      killer.once("close", () => resolve());
-    });
-    return;
-  }
-  signalGroup(child, force ? "SIGKILL" : "SIGTERM");
+  // taskkill /T walks the tree from a live root; /F is required for console apps.
+  if (isWindows) await taskkill([child.pid]);
+  else signalGroup(child.pid, force ? "SIGKILL" : "SIGTERM");
 }
 
-function signalGroup(child: ChildProcess, signal: NodeJS.Signals): void {
-  if (child.pid === undefined) return;
+/** SIGTERM, then SIGKILL, until the process group is gone. Resolves to whether it is. */
+async function stopGroup(pid: number): Promise<boolean> {
+  if (!groupExists(pid)) return true;
+  signalGroup(pid, "SIGTERM");
+  if (await waitUntil(() => !groupExists(pid), TERMINATE_GRACE_MS)) return true;
+  signalGroup(pid, "SIGKILL");
+  return waitUntil(() => !groupExists(pid), KILL_WAIT_MS);
+}
+
+function groupExists(pid: number): boolean {
   try {
-    process.kill(-child.pid, signal);
+    process.kill(-pid, 0);
+    return true;
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code === "EPERM";
+  }
+}
+
+function signalGroup(pid: number, signal: NodeJS.Signals): void {
+  try {
+    process.kill(-pid, signal);
   } catch {
     // ESRCH: the group is already gone.
   }
+}
+
+interface ProcessEntry {
+  pid: number;
+  parentPid: number;
+  createdAt: number;
+}
+
+/**
+ * Descendants of `root` that were created after `notBefore`. Windows does not
+ * reparent orphans, so a leftover still names its exited parent; the creation
+ * time guards against an unrelated process whose parent id was reused.
+ */
+export function descendantsOf(table: ProcessEntry[], root: number, notBefore: number): number[] {
+  const found: number[] = [];
+  const queue = [root];
+  while (queue.length > 0) {
+    const parent = queue.shift() as number;
+    for (const entry of table) {
+      if (
+        entry.pid !== root &&
+        entry.parentPid === parent &&
+        entry.createdAt >= notBefore &&
+        !found.includes(entry.pid)
+      ) {
+        found.push(entry.pid);
+        queue.push(entry.pid);
+      }
+    }
+  }
+  return found;
+}
+
+async function killWindowsDescendants(rootPid: number, spawnedAt: number): Promise<void> {
+  // Allow for clock granularity between Node and the process creation timestamp.
+  const victims = descendantsOf(await windowsProcessTable(), rootPid, spawnedAt - 2_000);
+  if (victims.length > 0) await taskkill(victims);
+}
+
+const WINDOWS_PROCESS_QUERY =
+  "Get-CimInstance Win32_Process | ForEach-Object { if ($_.CreationDate) { '{0} {1} {2}' -f " +
+  "$_.ProcessId, $_.ParentProcessId, $_.CreationDate.ToFileTimeUtc() } }";
+/** Milliseconds between the Windows FILETIME epoch (1601) and the Unix epoch. */
+const FILETIME_EPOCH_OFFSET_MS = 11_644_473_600_000;
+
+function windowsProcessTable(): Promise<ProcessEntry[]> {
+  // -EncodedCommand avoids every quoting question between Node and PowerShell.
+  const encoded = Buffer.from(WINDOWS_PROCESS_QUERY, "utf16le").toString("base64");
+  return new Promise((resolve, reject) => {
+    const query = spawn(
+      "powershell.exe",
+      ["-NoProfile", "-NonInteractive", "-EncodedCommand", encoded],
+      { stdio: ["ignore", "pipe", "ignore"], windowsHide: true, timeout: 30_000 },
+    );
+    const chunks: Buffer[] = [];
+    query.stdout.on("data", (chunk: Buffer) => chunks.push(chunk));
+    query.once("error", reject);
+    query.once("close", (code) => {
+      if (code !== 0) return reject(new Error(`process query exited with ${code}`));
+      const entries: ProcessEntry[] = [];
+      for (const line of Buffer.concat(chunks).toString("utf8").split(/\r?\n/)) {
+        const [pid, parentPid, filetime] = line.trim().split(" ");
+        if (!pid || !parentPid || !filetime || !/^\d+$/.test(filetime)) continue;
+        const createdAt = Number(BigInt(filetime) / 10_000n) - FILETIME_EPOCH_OFFSET_MS;
+        entries.push({ pid: Number(pid), parentPid: Number(parentPid), createdAt });
+      }
+      resolve(entries);
+    });
+  });
+}
+
+function taskkill(pids: number[]): Promise<void> {
+  return new Promise((resolve) => {
+    const args = [...pids.flatMap((pid) => ["/PID", String(pid)]), "/T", "/F"];
+    const killer = spawn("taskkill", args, { stdio: "ignore", windowsHide: true });
+    killer.once("error", () => resolve());
+    killer.once("close", () => resolve());
+  });
+}
+
+function outputClosed(child: ChildProcess): Promise<void> {
+  return new Promise((resolve) => {
+    if (child.stdout?.closed !== false && child.stderr?.closed !== false) resolve();
+    else child.once("close", () => resolve());
+  });
+}
+
+function destroyOutput(child: ChildProcess): void {
+  child.stdout?.destroy();
+  child.stderr?.destroy();
 }
 
 function settlesWithin(promise: Promise<void>, ms: number): Promise<boolean> {
@@ -224,4 +344,13 @@ function settlesWithin(promise: Promise<void>, ms: number): Promise<boolean> {
       resolve(true);
     });
   });
+}
+
+async function waitUntil(condition: () => boolean, ms: number): Promise<boolean> {
+  const deadline = Date.now() + ms;
+  while (!condition()) {
+    if (Date.now() >= deadline) return false;
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+  return true;
 }

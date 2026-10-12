@@ -9,6 +9,7 @@ First stable release.
 ### Added
 
 - `verifika` / `verifika run`: runs configured checks concurrently with dependency ordering, per-check timeouts, optional fail-fast, process-tree cleanup and signal handling.
+- Safety defaults: checks run sequentially unless `defaults.concurrency` or `-j` opts into parallelism; CI always runs the full suite unless `--changed`/`--changed-since` is passed explicitly (environment variables cannot switch CI mode off); a check passes only if its process tree was confirmed cleaned up; concurrent Verifika invocations in one directory keep their run records and logs apart.
 - Hybrid selection: selective runs from git changes locally (`changes.base`, `--changed`, `--changed-since <ref>` with merge-base semantics), full runs in CI and with `--all`, explicit `--check`. Global invalidation (`invalidateAll`), `paths`/`exclude` globs, `always` checks and `dependsOn`.
 - Conservative fallbacks: full runs when git cannot determine changes implicitly; exit 2 when an explicit comparison is impossible.
 - Output modes: `human` (live progress), `agent` (one line on success, bounded failure preview), `json` (versioned result, `schemaVersion: 1`) and `quiet`.
@@ -22,7 +23,7 @@ First stable release.
 ### Known limitations
 
 - No per-check lock: checks that write shared outputs need `dependsOn` or `concurrency: 1` (see the configuration reference).
-- Leftover background processes cannot be reaped on Windows once a check's main process has exited, or on POSIX when they leave the process group; Verifika reports them as a check warning.
+- On Linux and macOS, a process that deliberately leaves the check's process group (for example a daemon started with `setsid`) is not tracked unless it keeps the check's output open, in which case the check is reported as `error`.
 - Not yet published to the npm registry.
 
 [1.0.0]: https://github.com/alexportelli12/verifika/releases/tag/v1.0.0

@@ -1,7 +1,7 @@
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { readTail } from "../../src/logs.ts";
-import { execCheck } from "../../src/process.ts";
+import { descendantsOf, execCheck } from "../../src/process.ts";
 import { createRunId, logPath } from "../../src/runs.ts";
 import { tempDir, writeFiles } from "../helpers/repo.ts";
 
@@ -74,5 +74,34 @@ describe("execCheck", () => {
       signal: controller.signal,
     });
     expect(outcome).toMatchObject({ kind: "aborted", reason: "SIGINT" });
+  });
+});
+
+describe("descendantsOf", () => {
+  const entry = (pid: number, parentPid: number, createdAt: number) => ({
+    pid,
+    parentPid,
+    createdAt,
+  });
+
+  it("finds every generation below the root, including orphans of exited parents", () => {
+    const table = [
+      entry(10, 1, 1000), // the check's shell (already exited in practice)
+      entry(11, 10, 1100),
+      entry(12, 11, 1200),
+      entry(13, 12, 1300),
+      entry(20, 1, 1000), // unrelated
+    ];
+    expect(descendantsOf(table, 10, 1000).sort()).toEqual([11, 12, 13]);
+  });
+
+  it("ignores processes created before the check, whose parent id may have been reused", () => {
+    const table = [entry(11, 10, 500), entry(12, 10, 1500), entry(13, 11, 1600)];
+    expect(descendantsOf(table, 10, 1000)).toEqual([12]);
+  });
+
+  it("terminates on parent id cycles and never targets the root itself", () => {
+    const table = [entry(11, 10, 1500), entry(10, 11, 1500)];
+    expect(descendantsOf(table, 10, 1000)).toEqual([11]);
   });
 });

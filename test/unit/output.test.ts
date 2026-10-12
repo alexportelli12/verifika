@@ -23,7 +23,6 @@ function check(name: string, overrides: Partial<CheckResult> = {}): CheckResult 
     log: `.verifika/runs/r/${name}.log`,
     preview: [],
     error: null,
-    warning: null,
     ...overrides,
   };
 }
@@ -52,6 +51,7 @@ function run(checks: CheckResult[], overrides: Partial<RunResult> = {}): RunResu
       invalidatedBy: null,
     },
     summary,
+    latest: true,
     checks,
     ...overrides,
   };
@@ -140,12 +140,25 @@ describe("agent output", () => {
     expect(output).toContain("x: could not start: spawn ENOENT");
   });
 
-  it("surfaces warnings even when the run passed", () => {
+  it("names the run in the logs hint when a later run became the latest", () => {
+    const output = renderAgent(run([failure], { latest: false }));
+    expect(output).toContain("Run: verifika logs typecheck --run 20261012-000000-000-abcdef\n");
+  });
+
+  it("reports a check whose processes could not be cleaned up as an error", () => {
     const output = renderAgent(
-      run([check("serve", { warning: "a background process kept running" })]),
+      run([
+        check("serve", {
+          status: "error",
+          reason: "process tree not cleaned up",
+          error: "a process kept the check's output open and could not be stopped",
+        }),
+      ]),
     );
-    expect(output).toContain("PASS 1/1");
-    expect(output).toContain("serve: warning: a background process kept running\n");
+    expect(output).toMatch(/^FAIL 0\/1/);
+    expect(output).toContain(
+      "serve: process tree not cleaned up: a process kept the check's output open and could not be stopped\n",
+    );
   });
 
   it("labels interrupted runs", () => {
@@ -414,12 +427,14 @@ describe("detectCi", () => {
     [{}, false, "none"],
     [{ CI: "true" }, true, "CI"],
     [{ CI: "1" }, true, "CI"],
-    [{ CI: "false" }, false, "CI"],
-    [{ CI: "0", GITHUB_ACTIONS: "true" }, false, "CI"],
+    [{ CI: "false" }, false, "none"],
+    [{ CI: "0", GITHUB_ACTIONS: "true" }, true, "GITHUB_ACTIONS"],
+    [{ CI: "false", GITLAB_CI: "true" }, true, "GITLAB_CI"],
+    [{ GITHUB_ACTIONS: "false" }, false, "none"],
     [{ GITLAB_CI: "true" }, true, "GITLAB_CI"],
     [{ JENKINS_URL: "http://ci" }, true, "JENKINS_URL"],
-    [{ CI: "true", VERIFIKA_CI: "0" }, false, "VERIFIKA_CI"],
-    [{ VERIFIKA_CI: "1" }, true, "VERIFIKA_CI"],
+    [{ CI: "true", VERIFIKA_CI: "0" }, true, "CI"],
+    [{ VERIFIKA_CI: "1" }, false, "none"],
     [{ CI: "" }, false, "none"],
   ])("%j -> ci=%s via %s", (env, ci, source) => {
     expect(detectCi(env)).toEqual({ ci, source });

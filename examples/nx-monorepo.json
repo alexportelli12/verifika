@@ -1,14 +1,13 @@
 {
   "$schema": "../schemas/verifika.schema.json",
   "version": 1,
-  "defaults": {
-    "concurrency": 2
-  },
   "changes": {
     "invalidateAll": ["package.json", "package-lock.json", "nx.json", "tsconfig*.json"]
   },
   "checks": {
-    "format": { "command": "npx nx format:check" },
+    "format": {
+      "command": "npx nx format:check"
+    },
     "lint": {
       "command": "npx nx affected -t lint --base=origin/main",
       "paths": ["apps/**", "libs/**"]

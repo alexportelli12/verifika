@@ -1,14 +1,31 @@
 {
   "$schema": "../schemas/verifika.schema.json",
   "version": 1,
+  "defaults": {
+    "concurrency": 3
+  },
   "changes": {
     "invalidateAll": ["package.json", "package-lock.json", "tsconfig*.json", "eslint.config.*"]
   },
   "checks": {
-    "format": { "command": "npm run format:check" },
-    "lint": { "command": "npm run lint", "paths": ["src/**/*.ts", "test/**/*.ts"] },
-    "typecheck": { "command": "npm run typecheck", "paths": ["src/**/*.ts", "test/**/*.ts"] },
-    "test": { "command": "npm test", "paths": ["src/**", "test/**"] },
-    "build": { "command": "npm run build", "paths": ["src/**"] }
+    "format": {
+      "command": "npm run format:check"
+    },
+    "lint": {
+      "command": "npm run lint",
+      "paths": ["src/**/*.ts", "test/**/*.ts"]
+    },
+    "typecheck": {
+      "command": "npm run typecheck",
+      "paths": ["src/**/*.ts", "test/**/*.ts"]
+    },
+    "test": {
+      "command": "npm test",
+      "paths": ["src/**", "test/**"]
+    },
+    "build": {
+      "command": "npm run build",
+      "paths": ["src/**"]
+    }
   }
 }

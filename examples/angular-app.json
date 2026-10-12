@@ -2,7 +2,6 @@
   "$schema": "../schemas/verifika.schema.json",
   "version": 1,
   "defaults": {
-    "concurrency": 2,
     "timeoutMs": 900000
   },
   "changes": {

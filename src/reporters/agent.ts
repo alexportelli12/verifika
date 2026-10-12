@@ -41,9 +41,6 @@ export function renderAgent(result: RunResult): string {
       lines.push(...check.preview.map((line) => `  ${line}`));
     }
   }
-  for (const check of result.checks) {
-    if (check.warning) lines.push(`${check.name}: warning: ${check.warning}`);
-  }
   const hint = logsHint(result);
   if (hint) lines.push(`Run: ${hint}`);
   return `${lines.join("\n")}\n`;

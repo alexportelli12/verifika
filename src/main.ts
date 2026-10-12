@@ -42,7 +42,7 @@ Selection (run, plan):
                                   including uncommitted and untracked files
 
 Execution (run):
-  -j, --concurrency <n>           Maximum checks running at once
+  -j, --concurrency <n>           Maximum checks running at once (default 1)
       --fail-fast                 Stop everything after the first failure
       --no-fail-fast              Run every selected check even after a failure
       --preview <lines>           Failure preview lines per check (default ${DEFAULT_PREVIEW_LINES}, 0 = off)

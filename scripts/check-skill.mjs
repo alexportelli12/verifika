@@ -70,7 +70,7 @@ try {
     const result = spawnSync(process.execPath, [cli, ...args], {
       cwd: fixture,
       encoding: "utf8",
-      env: { ...process.env, VERIFIKA_CI: "0", VERIFIKA_MODE: "", CI: "" },
+      env: { ...process.env, VERIFIKA_MODE: "", CI: "" },
       timeout: 60_000,
     });
     if (
@@ -134,7 +134,7 @@ function setUpFixture(root) {
   const run = spawnSync(process.execPath, [cli, "--all"], {
     cwd: root,
     encoding: "utf8",
-    env: { ...process.env, VERIFIKA_CI: "0" },
+    env: process.env,
   });
   if (run.status !== 0) fail(`fixture run failed: ${run.stdout}${run.stderr}`);
 }

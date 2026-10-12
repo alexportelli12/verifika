@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { Ajv } from "ajv";
 import { describe, expect, it } from "vitest";
-import { defaultConcurrency, findConfigFile, loadConfig, parseConfig } from "../../src/config.ts";
+import { findConfigFile, loadConfig, parseConfig } from "../../src/config.ts";
 import { VerifikaError } from "../../src/errors.ts";
 import { tempDir, writeFiles } from "../helpers/repo.ts";
 
@@ -27,7 +27,7 @@ describe("parseConfig", () => {
     const config = parseConfig({ version: 1, checks: { lint: { command: "npm run lint" } } }, FILE);
     expect(config).toMatchObject({
       root: path.dirname(FILE),
-      concurrency: defaultConcurrency(),
+      concurrency: 1,
       timeoutMs: 600_000,
       failFast: false,
       keepRuns: 10,

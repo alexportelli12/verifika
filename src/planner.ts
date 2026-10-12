@@ -52,11 +52,9 @@ export async function plan(
   if (request.all) return fullSelection(config, "--all", null);
 
   const explicitSelective = request.changed === true || request.changedSince !== undefined;
-  if (!explicitSelective) {
-    const ci = detectCi(request.env ?? process.env);
-    if (ci.ci) {
-      return fullSelection(config, `CI detected via ${ci.source}`, null);
-    }
+  const ci = detectCi(request.env ?? process.env);
+  if (ci.ci && !explicitSelective) {
+    return fullSelection(config, `CI detected via ${ci.source}`, null);
   }
 
   const base = request.changedSince ?? config.base;
@@ -66,7 +64,11 @@ export async function plan(
       throw new VerifikaError(`cannot determine changes: ${detection.reason}`, detection.hint);
     return fullSelection(config, `change detection unavailable: ${detection.reason}`, null);
   }
-  return changedSelection(config, detection.changes);
+  const selection = changedSelection(config, detection.changes);
+  // Make a deliberately narrowed CI run visible in every output mode.
+  return ci.ci
+    ? { ...selection, reason: `${selection.reason}; selective in CI by request` }
+    : selection;
 }
 
 function explicitSelection(config: VerifikaConfig, names: string[]): Selection {

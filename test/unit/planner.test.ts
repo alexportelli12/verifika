@@ -21,7 +21,7 @@ const config = parseConfig(
   "/repo/verifika.config.json",
 );
 
-const LOCAL = { VERIFIKA_CI: "0" };
+const LOCAL = {};
 
 function changes(...paths: string[]): DetectChanges {
   const files: ChangedFile[] = paths.map((path) => ({ path, status: "modified" }));
@@ -131,6 +131,17 @@ describe("plan", () => {
     expect(selection).toMatchObject({ mode: "all", reason: "CI detected via GITHUB_ACTIONS" });
   });
 
+  it("cannot be talked out of CI mode by environment variables", async () => {
+    for (const env of [
+      { GITHUB_ACTIONS: "true", CI: "false" },
+      { CI: "true", VERIFIKA_CI: "0" },
+      { BUILDKITE: "true", CI: "" },
+    ]) {
+      const selection = await plan(config, { env }, changes("docs/a.md"));
+      expect(selection.mode, JSON.stringify(env)).toBe("all");
+    }
+  });
+
   it("lets CI opt into selective runs explicitly", async () => {
     const changed = await plan(
       config,
@@ -138,6 +149,7 @@ describe("plan", () => {
       changes("docs/a.md"),
     );
     expect(changed.mode).toBe("changed");
+    expect(changed.reason).toContain("selective in CI by request");
     const since = await plan(
       config,
       { changedSince: "origin/main", env: { CI: "1" } },

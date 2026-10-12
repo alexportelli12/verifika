@@ -3,7 +3,15 @@ import path from "node:path";
 import { formatSeconds } from "./format.ts";
 import { execCheck, type ExecOutcome } from "./process.ts";
 import type { Reporter } from "./reporters/reporter.ts";
-import { createRunId, logPath, markLatest, prepareRun, pruneRuns, writeRunResult } from "./runs.ts";
+import {
+  createRun,
+  logPath,
+  markLatest,
+  pruneRuns,
+  readLatest,
+  releaseRun,
+  writeRunResult,
+} from "./runs.ts";
 import { schedule, type StopReason, type TaskOutcome } from "./scheduler.ts";
 import type {
   CheckConfig,
@@ -30,9 +38,7 @@ export interface RunOptions {
 export async function runVerification(options: RunOptions): Promise<RunResult> {
   const { config, selection, reporter } = options;
   const started = performance.now();
-  const runId = createRunId();
   const root = config.root;
-  await prepareRun(root, runId);
 
   const byName = new Map(config.checks.map((check) => [check.name, check]));
   const results = new Map<string, CheckResult>(
@@ -42,13 +48,14 @@ export async function runVerification(options: RunOptions): Promise<RunResult> {
     }),
   );
 
-  const result: RunResult = {
+  const startedAt = new Date().toISOString();
+  const resultFor = (runId: string): RunResult => ({
     schemaVersion: 1,
     tool: { name: "verifika", version: options.version },
     runId,
     status: "running",
     exitCode: 1,
-    startedAt: new Date().toISOString(),
+    startedAt,
     durationMs: 0,
     root,
     logsDir: path.posix.dirname(logPath(runId, "x")),
@@ -60,18 +67,15 @@ export async function runVerification(options: RunOptions): Promise<RunResult> {
       changedFiles: selection.changes?.files ?? [],
       invalidatedBy: selection.invalidatedBy,
     },
-    summary: { total: 0, selected: 0, passed: 0, failed: 0, notRun: 0, skipped: 0 },
-    checks: [],
-  };
-  const snapshot = (): RunResult => ({
-    ...result,
+    latest: true,
     checks: [...results.values()],
     summary: summarize([...results.values()]),
   });
 
   // Record the run before anything executes, so `verifika logs` never shows a stale
   // earlier run as "latest" if this one is killed.
-  await writeRunResult(root, snapshot());
+  const runId = await createRun(root, resultFor);
+  const result = resultFor(runId);
   await markLatest(root, runId);
   await pruneRuns(root, config.keepRuns, runId);
 
@@ -140,8 +144,11 @@ export async function runVerification(options: RunOptions): Promise<RunResult> {
     durationMs: Math.round(performance.now() - started),
     checks,
     summary: summarize(checks),
+    // A run started meanwhile took over `latest`; logs hints must then name this run.
+    latest: (await readLatest(root)) === runId,
   };
   await writeRunResult(root, final);
+  await releaseRun(root, runId);
   reporter.onFinish(final);
   return final;
 }
@@ -159,7 +166,6 @@ function initialResult(check: CheckConfig, selected: boolean, reason: string): C
     log: null,
     preview: [],
     error: null,
-    warning: null,
   };
 }
 
@@ -174,8 +180,18 @@ function completedResult(
     durationMs: outcome.durationMs,
     log,
     preview: outcome.preview,
-    warning: outcome.warning ?? null,
   };
+  // Leftover processes may still be changing files or holding ports, so the check's own
+  // result cannot be trusted as a pass, whatever its exit code.
+  if (outcome.cleanupError !== undefined && outcome.kind !== "aborted") {
+    return {
+      ...common,
+      status: "error",
+      reason: "process tree not cleaned up",
+      exitCode: outcome.kind === "exited" ? outcome.exitCode : null,
+      error: outcome.cleanupError,
+    };
+  }
   switch (outcome.kind) {
     case "exited":
       if (outcome.exitCode === 0)

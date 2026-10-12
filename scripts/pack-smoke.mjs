@@ -92,7 +92,7 @@ try {
       cwd: project,
       encoding: "utf8",
       shell: isWindows,
-      env: { ...process.env, VERIFIKA_CI: "0", VERIFIKA_MODE: "" },
+      env: { ...process.env, VERIFIKA_MODE: "" },
     });
   const version = run(["--version"]);
   assert(

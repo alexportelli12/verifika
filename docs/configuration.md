@@ -17,7 +17,7 @@ When Verifika is not a local dependency, use `https://raw.githubusercontent.com/
   "$schema": "./node_modules/verifika/schemas/verifika.schema.json",
   "version": 1,
   "defaults": {
-    "concurrency": 3,
+    "concurrency": 1,
     "timeoutMs": 300000,
     "failFast": false,
     "keepRuns": 10
@@ -56,12 +56,12 @@ Unknown properties are errors, so typos never silently disable a setting.
 
 ## `defaults`
 
-| Field         | Default                            | Description                                                                                                  |
-| ------------- | ---------------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| `concurrency` | half the CPU cores, clamped to 1–4 | Maximum checks running at once (1–64). Override with `-j`.                                                   |
-| `timeoutMs`   | `600000` (10 minutes)              | Per-check timeout. A check that exceeds it is killed (with its child processes) and reported `timed_out`.    |
-| `failFast`    | `false`                            | Stop all running and pending checks after the first failure. Override with `--fail-fast` / `--no-fail-fast`. |
-| `keepRuns`    | `10`                               | How many runs of logs to keep in `.verifika/runs` (1–1000).                                                  |
+| Field         | Default               | Description                                                                                                                               |
+| ------------- | --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `concurrency` | `1`                   | Maximum checks running at once (1–64). Override with `-j`. See [checks that share outputs](#checks-that-share-outputs) before raising it. |
+| `timeoutMs`   | `600000` (10 minutes) | Per-check timeout. A check that exceeds it is killed (with its child processes) and reported `timed_out`.                                 |
+| `failFast`    | `false`               | Stop all running and pending checks after the first failure. Override with `--fail-fast` / `--no-fail-fast`.                              |
+| `keepRuns`    | `10`                  | How many runs of logs to keep in `.verifika/runs` (1–1000).                                                                               |
 
 ## `changes`
 
@@ -105,13 +105,20 @@ Checks run with piped (non-TTY) output, so most tools disable colours and intera
 
 ### Checks that share outputs
 
-Independent checks run at the same time. Checks that write the same files must not: for example a `build` that deletes and recreates `dist/` while another check reads `dist/`, or two scripts that both restage a shared vendor directory. Running them concurrently produces real but misleading failures (missing modules, crashed browsers). Verifika reports these as failures, never as passes, but they waste time.
+Checks run one at a time by default. Set `defaults.concurrency` (or pass `-j`) to run independent checks in parallel, which can cut a full run substantially (34% on one real project; see [benchmarks](benchmarks.md)).
 
-Version 1 has no per-check lock. Choose one of:
+Only raise it when the checks running together do not write the same files. Examples of sharing that breaks under concurrency:
 
-- `dependsOn`, when one check genuinely needs the other's output first (it also pulls the dependency into selective runs and blocks on its failure);
-- `"defaults": { "concurrency": 1 }`, when many scripts share build state; the run is sequential but keeps selection, timeouts and compact output;
-- restructuring the scripts so each check builds into its own output directory.
+- a `build` that deletes and recreates `dist/` while another check reads `dist/` (tests importing built packages, a packaging check);
+- two scripts that restage the same vendor or generated directory;
+- tools that share a cache directory without locking it (for example the Angular CLI's `.angular/cache` used by both `ng build` and `ng test`);
+- browser test suites competing for a fixed port.
+
+Running such checks concurrently produces real but misleading failures (missing modules, crashed browsers, timeouts). Verifika reports them as failures, never as passes, but they waste time. Version 1 has no per-check lock. Choose one of:
+
+- keep the default sequential execution;
+- `dependsOn`, when one check genuinely needs another's output first (it also pulls the dependency into selective runs and blocks on its failure);
+- restructuring the scripts so each check builds into its own output directory, then raising `concurrency`.
 
 ## Glob syntax
 
@@ -153,8 +160,14 @@ In CI, shallow clones are common. `verifika` in CI runs everything without consu
 
 ## CI detection
 
-A run counts as CI when `CI` is set to anything other than `false`/`0`/empty, or when a provider variable is present (`GITHUB_ACTIONS`, `GITLAB_CI`, `BUILDKITE`, `CIRCLECI`, `TRAVIS`, `JENKINS_URL`, `TF_BUILD`, `TEAMCITY_VERSION`, `BITBUCKET_BUILD_NUMBER`, `CODEBUILD_BUILD_ID`, `DRONE`, `APPVEYOR`, `SEMAPHORE`). Set `VERIFIKA_CI=1` or `VERIFIKA_CI=0` to override detection.
+A run counts as CI when `CI` is set to anything other than `false`/`0`/empty, or when any provider variable is set (`GITHUB_ACTIONS`, `GITLAB_CI`, `BUILDKITE`, `CIRCLECI`, `TRAVIS`, `JENKINS_URL`, `TF_BUILD`, `TEAMCITY_VERSION`, `BITBUCKET_BUILD_NUMBER`, `CODEBUILD_BUILD_ID`, `DRONE`, `APPVEYOR`, `SEMAPHORE`). Environment variables can only turn CI mode on: `CI=false` does not cancel a provider variable, because some build setups export it for unrelated reasons, and there is no variable that disables detection. In CI, plain `verifika` always runs every check. A selective CI run needs an explicit `--changed` or `--changed-since <ref>` on the command line, and its output says `selective in CI by request`.
 
 ## Run storage
 
-Logs live in `.verifika/` under the project root. Verifika writes `.verifika/.gitignore` containing `*`, so the directory is ignored without touching your own `.gitignore`. Each run directory contains one `<check>.log` per executed check and `run.json`, the same document `--mode json` prints. `.verifika/latest` names the most recent run.
+Logs live in `.verifika/` under the project root. Verifika writes `.verifika/.gitignore` containing `*`, so the directory is ignored without touching your own `.gitignore`. Each run directory contains one `<check>.log` per executed check and `run.json`, the same document `--mode json` prints. `.verifika/latest` names the most recently started run.
+
+Several Verifika processes can share a project directory safely (for example two agents, or an agent and an editor integration):
+
+- Each run directory is created atomically with its `run.json` and an owner record naming the process, which is removed when the run finishes.
+- Retention (`keepRuns`) never deletes a run whose owner is still running. Runs left behind by a process that crashed are pruned like finished runs, and so are half-created directories older than an hour.
+- `latest` points at the run that started last. If another run started while yours was in progress, your run's result has `"latest": false` and its logs hint includes `--run <id>`, so it always leads to your own logs.

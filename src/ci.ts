@@ -1,5 +1,5 @@
-/** Variables set by common CI providers, checked when `CI` itself is absent. */
-const CI_VARIABLES = [
+/** Variables set by common CI providers. */
+export const CI_VARIABLES = [
   "GITHUB_ACTIONS",
   "GITLAB_CI",
   "BUILDKITE",
@@ -21,22 +21,19 @@ export interface CiDetection {
 }
 
 /**
- * Decides whether this is a CI run. `VERIFIKA_CI` overrides detection in either
- * direction; otherwise `CI` (unless "false" or "0") or a known provider variable
- * means CI.
+ * Decides whether this is a CI run, where verification defaults to the full
+ * suite. Environment variables can only turn CI mode on: a truthy `CI` or any
+ * provider variable means CI, and nothing (including `CI=false`, which some
+ * build setups export for unrelated reasons) can switch a detected provider
+ * off. Selective runs in CI require an explicit `--changed` or `--changed-since`.
  */
 export function detectCi(env: NodeJS.ProcessEnv): CiDetection {
-  const override = env.VERIFIKA_CI;
-  if (override !== undefined && override !== "") {
-    return { ci: isTruthy(override), source: "VERIFIKA_CI" };
-  }
-  if (env.CI !== undefined && env.CI !== "") {
-    return { ci: isTruthy(env.CI), source: "CI" };
-  }
-  const provider = CI_VARIABLES.find((name) => env[name] !== undefined && env[name] !== "");
+  if (isEnabled(env.CI)) return { ci: true, source: "CI" };
+  const provider = CI_VARIABLES.find((name) => isEnabled(env[name]));
   return provider ? { ci: true, source: provider } : { ci: false, source: "none" };
 }
 
-function isTruthy(value: string): boolean {
-  return !["0", "false", "no", "off"].includes(value.trim().toLowerCase());
+function isEnabled(value: string | undefined): boolean {
+  if (value === undefined) return false;
+  return !["", "0", "false", "no", "off"].includes(value.trim().toLowerCase());
 }

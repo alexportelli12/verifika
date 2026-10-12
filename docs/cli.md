@@ -24,12 +24,12 @@ See [change detection semantics](configuration.md#change-detection-semantics).
 
 ## Execution (`run`)
 
-| Option                  | Effect                                                                             |
-| ----------------------- | ---------------------------------------------------------------------------------- |
-| `-j, --concurrency <n>` | Maximum checks running at once. Default: `defaults.concurrency`.                   |
-| `--fail-fast`           | After the first failure, terminate running checks and skip pending ones.           |
-| `--no-fail-fast`        | Run every selected check even after failures (overrides `defaults.failFast`).      |
-| `--preview <lines>`     | Failure preview lines per check in human and agent output. Default 10; 0 disables. |
+| Option                  | Effect                                                                                             |
+| ----------------------- | -------------------------------------------------------------------------------------------------- |
+| `-j, --concurrency <n>` | Maximum checks running at once. Default: `defaults.concurrency`, which defaults to 1 (sequential). |
+| `--fail-fast`           | After the first failure, terminate running checks and skip pending ones.                           |
+| `--no-fail-fast`        | Run every selected check even after failures (overrides `defaults.failFast`).                      |
+| `--preview <lines>`     | Failure preview lines per check in human and agent output. Default 10; 0 disables.                 |
 
 ## Logs (`logs`)
 
@@ -94,6 +94,7 @@ For `run` and `plan`, `--mode json` prints exactly one JSON document to stdout, 
   "durationMs": 3204,
   "root": "/home/me/project",
   "logsDir": ".verifika/runs/20261012-143955-042-a1b2c3",
+  "latest": true,
   "selection": {
     "mode": "changed",
     "reason": "2 files changed since HEAD (a1b2c3d)",
@@ -115,22 +116,22 @@ For `run` and `plan`, `--mode json` prints exactly one JSON document to stdout, 
       "durationMs": 3101,
       "log": ".verifika/runs/20261012-143955-042-a1b2c3/typecheck.log",
       "preview": ["src/cart.ts(14,7): error TS2322: ..."],
-      "error": null,
-      "warning": null
+      "error": null
     }
   ]
 }
 ```
 
-| Field                   | Values                                                                                                                      |
-| ----------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| `status`                | `passed`, `failed`, `interrupted` (`running` only appears in `run.json` of a run that never finished)                       |
-| `selection.mode`        | `all`, `changed`, `explicit`                                                                                                |
-| `changedFiles[].status` | `added`, `modified`, `deleted`, `untracked`, `changed` (type change, conflict)                                              |
-| `checks[].status`       | `passed`, `failed`, `timed_out`, `error` (could not start), `blocked`, `cancelled`, `interrupted`, `skipped` (not selected) |
-| `summary.failed`        | selected checks that failed, timed out or could not start                                                                   |
-| `summary.notRun`        | selected checks that were blocked, cancelled or interrupted                                                                 |
-| `checks[].log`          | path relative to `root`, or `null` when the check never started                                                             |
+| Field                   | Values                                                                                                                                                                |
+| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `status`                | `passed`, `failed`, `interrupted` (`running` only appears in `run.json` of a run that never finished)                                                                 |
+| `selection.mode`        | `all`, `changed`, `explicit`                                                                                                                                          |
+| `changedFiles[].status` | `added`, `modified`, `deleted`, `untracked`, `changed` (type change, conflict)                                                                                        |
+| `checks[].status`       | `passed`, `failed`, `timed_out`, `error` (could not start, or its processes could not be cleaned up), `blocked`, `cancelled`, `interrupted`, `skipped` (not selected) |
+| `summary.failed`        | selected checks that failed, timed out or could not start                                                                                                             |
+| `summary.notRun`        | selected checks that were blocked, cancelled or interrupted                                                                                                           |
+| `checks[].log`          | path relative to `root`, or `null` when the check never started                                                                                                       |
+| `latest`                | `false` when another run started in the same directory after this one; `verifika logs` without `--run` then shows that other run                                      |
 
 Usage and configuration errors in JSON mode print `{"schemaVersion": 1, "status": "error", "exitCode": 2, "error": {"message": "...", "hint": "..."}}`.
 
@@ -152,13 +153,18 @@ A check's own exit code is in the JSON result and the agent output (`typecheck: 
 
 The first SIGINT, SIGTERM or SIGHUP stops scheduling, sends SIGTERM to every running check's process group (on Windows, `taskkill /T /F`), waits up to two seconds, then kills what is left. The run is recorded as `interrupted`. A second signal kills running checks immediately. If Verifika itself is killed with SIGKILL it cannot clean up: because each check runs in its own process group, checks that are already running keep running, and the run stays `running` in `run.json`. Harnesses and CI timeouts that hard-kill processes should send SIGTERM first.
 
-After a check's main process exits, Verifika also terminates anything still left in its process group on Linux and macOS (such as a forgotten background server). Two cases are out of reach: processes that leave the group (for example with `setsid`), and on Windows any descendant that outlives the check's main process, because the tree can no longer be found once its root has exited. If such a process keeps the output pipe open, Verifika stops reading after about four seconds and attaches a warning to the check (`warning` in JSON, a `warning:` line in agent output). The check's result is unaffected, but the process may still be running.
+When a check's main process exits, Verifika makes sure nothing it started is left running before recording the result:
+
+- On Linux and macOS each check runs in its own process group. Verifika sends the group SIGTERM, then SIGKILL, and waits until the group no longer exists. Processes that ignore SIGTERM are killed.
+- On Windows, where a tree cannot be walked once its root has exited, Verifika lists processes whose parent chain leads back to the check (created after it started) and terminates them with `taskkill /F`.
+- A command that does not exit even after being killed is abandoned after a few seconds instead of hanging the run.
+
+If any of this cannot be confirmed, the check is reported as `error` with reason `process tree not cleaned up`, whatever its exit code, and the run fails. A leftover process could still be writing files or holding ports, so its result cannot count as a pass. One case is out of reach: on Linux and macOS, a process that deliberately leaves the process group (`setsid`, or Node's `detached`) and closes its output is a daemon by design and is not tracked; if it keeps the check's output open, the check is reported as `error`.
 
 ## Environment variables
 
 | Variable        | Effect                                           |
 | --------------- | ------------------------------------------------ |
 | `VERIFIKA_MODE` | Default output mode.                             |
-| `VERIFIKA_CI`   | `1`/`0` forces CI detection on or off.           |
 | `NO_COLOR`      | Disables colour in human mode.                   |
 | `FORCE_COLOR`   | Enables colour in human mode without a terminal. |

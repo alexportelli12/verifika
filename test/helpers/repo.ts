@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach } from "vitest";
+import { CI_VARIABLES } from "../../src/ci.ts";
 
 export const CLI = fileURLToPath(new URL("../../src/cli.ts", import.meta.url));
 const FIXTURE = fileURLToPath(new URL("./fixture-check.mjs", import.meta.url));
@@ -90,10 +91,12 @@ export interface CliResult {
 
 /** Environment with CI detection and output-mode overrides neutralised. */
 export function cleanEnv(extra: NodeJS.ProcessEnv = {}): NodeJS.ProcessEnv {
+  // Tests run inside CI too; strip every CI signal so selective behaviour is testable.
+  const ciSignals = new Set<string>(["CI", ...CI_VARIABLES]);
   const inherited = Object.entries(process.env).filter(
-    ([key]) => key !== "CI" && key !== "GITHUB_ACTIONS" && !key.startsWith("VERIFIKA"),
+    ([key]) => !ciSignals.has(key) && !key.startsWith("VERIFIKA"),
   );
-  return { ...Object.fromEntries(inherited), VERIFIKA_CI: "0", NO_COLOR: "1", ...extra };
+  return { ...Object.fromEntries(inherited), NO_COLOR: "1", ...extra };
 }
 
 export function runCli(

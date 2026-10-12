@@ -25,7 +25,7 @@ _Verifika_ is Maltese for "verification".
 
 - **Deterministic.** Check selection comes from your config, file globs, dependencies and git. No heuristics, no LLM. When the change scope is unclear, Verifika runs everything or fails loudly; it never quietly skips a check.
 - **Token-efficient.** Agents get one line on success and a bounded failure preview on failure. Full logs stay on disk until asked for.
-- **Fast.** Independent checks run in parallel, within a concurrency limit. One small runtime dependency.
+- **Fast.** Selective runs skip unaffected checks, and independent checks can run in parallel once you opt in (`defaults.concurrency`). One small runtime dependency.
 - **Reliable.** Timeouts, fail-fast, process cleanup, correct exit codes and signal handling, tested on Linux, macOS and Windows.
 
 ## Install
@@ -94,7 +94,7 @@ Add a script so everyone runs the same full gate:
 | Situation                                      | What runs                                                                                                           |
 | ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
 | `verifika` locally                             | Checks whose `paths` match files changed since `changes.base` (default `HEAD`: your uncommitted and untracked work) |
-| `verifika` in CI (`CI` or a known CI variable) | Everything                                                                                                          |
+| `verifika` in CI (`CI` or a known CI variable) | Everything; only `--changed`/`--changed-since` on the command line can narrow it                                    |
 | `verifika --all`                               | Everything                                                                                                          |
 | `verifika --check lint`                        | `lint` and its dependencies                                                                                         |
 | `verifika --changed-since origin/main`         | Checks matching files changed since `merge-base(origin/main, HEAD)`, plus uncommitted and untracked files           |

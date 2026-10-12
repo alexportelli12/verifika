@@ -35,11 +35,17 @@ cli.ts ─ main.ts ── config.ts ──► VerifikaConfig
 
 **Shell commands, trusted config.** Commands are strings run by the platform shell, like package scripts. This keeps configs portable (`npm run lint` works everywhere, including `.cmd` shims on Windows) and familiar. The config file is trusted; nothing derived from the repository state (file names, refs) is ever placed in a command. Git is invoked with argument arrays, never a shell, and refs starting with `-` are rejected.
 
-**Process groups.** On POSIX each check runs in its own process group (`detached`), so a timeout, fail-fast or Ctrl-C can signal the whole tree at once: SIGTERM, a two-second grace period, then SIGKILL. When a check's main process exits, the rest of its group is reaped too, which also prevents a background process from holding the output pipe open and hanging the run. On Windows, `taskkill /T /F` terminates the tree while its root is alive; descendants that outlive the root (and POSIX processes that leave the group with `setsid`) cannot be reaped, so Verifika reports them as a check warning instead of staying silent.
+**Confirmed cleanup.** On POSIX each check runs in its own process group (`detached`), so a timeout, fail-fast or Ctrl-C can signal the whole tree at once: SIGTERM, a two-second grace period, then SIGKILL. After a check exits, the rest of its group is terminated the same way and Verifika polls until the group is gone, which also stops a background process from holding the output pipe open. On Windows the tree is killed with `taskkill /T /F` while its root is alive; once the root has exited, descendants are found by parent process id and creation time and killed. If cleanup cannot be confirmed, the check is an `error`, never a pass. A process that survives SIGKILL is abandoned after a bounded wait so the run cannot hang.
 
 **Bounded memory.** Check output is piped straight into the log file with backpressure. The only in-memory output is the preview: at most `--preview` lines of at most 200 characters, plus one partial line capped at 4 KB per stream. A check can print gigabytes without affecting Verifika.
 
 **Stable, explicit results.** Every selected check ends in exactly one status. Any status other than `passed` makes the run fail. The JSON document is versioned (`schemaVersion: 1`) and identical to the `run.json` written to disk, so tools can read either.
+
+**Concurrent invocations.** Run directories are created by renaming a fully prepared temporary directory, carry an owner record (pid and host) until they finish, and are only pruned once that owner is gone. Logs hints name the run explicitly when another run has since become `latest`.
+
+**Sequential by default.** Only the project knows which of its scripts share build outputs, so parallelism is opt-in through `defaults.concurrency` or `-j`.
+
+**CI mode only strengthens.** Environment variables can switch CI mode on but never off; narrowing a CI run requires an explicit command-line flag.
 
 **Run records first.** `run.json` (status `running`) and the `latest` pointer are written before any check starts. If Verifika is killed outright, `verifika logs` shows that unfinished run rather than a misleading earlier one.
 

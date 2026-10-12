@@ -1,5 +1,4 @@
 import { readFileSync, statSync } from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { VerifikaError } from "./errors.ts";
 import type { CheckConfig, VerifikaConfig } from "./types.ts";
@@ -14,10 +13,12 @@ export const MAX_TIMEOUT_MS = 2_147_483_647;
 const RESERVED_NAMES = /^(con|prn|aux|nul|com[0-9]|lpt[0-9])(\..*)?$/i;
 const DEFAULT_KEEP_RUNS = 10;
 
-/** Half the available cores, between 1 and 4: checks such as tsc and test runners are multi-threaded themselves. */
-export function defaultConcurrency(): number {
-  return Math.max(1, Math.min(4, Math.floor(os.availableParallelism() / 2)));
-}
+/**
+ * Checks run one at a time unless the config (or `-j`) opts into parallelism:
+ * only the project knows which of its scripts share build outputs, and running
+ * those concurrently produces real but misleading failures.
+ */
+export const DEFAULT_CONCURRENCY = 1;
 
 /** Walks up from `cwd` to find verifika.config.json, or uses the explicit path. */
 export function findConfigFile(cwd: string, explicit?: string): string {
@@ -85,7 +86,7 @@ export function parseConfig(raw: unknown, file: string): VerifikaConfig {
   }
 
   const defaults = raw.defaults ?? {};
-  let concurrency = defaultConcurrency();
+  let concurrency = DEFAULT_CONCURRENCY;
   let timeoutMs = DEFAULT_TIMEOUT_MS;
   let failFast = false;
   let keepRuns = DEFAULT_KEEP_RUNS;
