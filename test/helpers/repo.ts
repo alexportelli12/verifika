@@ -30,11 +30,19 @@ export function writeFiles(root: string, files: Record<string, string>): void {
   }
 }
 
+// Isolate test repositories from the developer's git config. An empty file rather
+// than os.devNull, which Git for Windows cannot open as a config file.
+const EMPTY_GIT_CONFIG = path.join(
+  mkdtempSync(path.join(os.tmpdir(), "verifika-gitconfig-")),
+  "config",
+);
+writeFileSync(EMPTY_GIT_CONFIG, "");
+
 export function git(cwd: string, ...args: string[]): string {
   return execFileSync("git", args, {
     cwd,
     encoding: "utf8",
-    env: { ...process.env, GIT_CONFIG_NOSYSTEM: "1", GIT_CONFIG_GLOBAL: os.devNull },
+    env: { ...process.env, GIT_CONFIG_NOSYSTEM: "1", GIT_CONFIG_GLOBAL: EMPTY_GIT_CONFIG },
     stdio: ["ignore", "pipe", "pipe"],
   }).trim();
 }
