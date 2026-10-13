@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "defaults": { "concurrency": 4 },
+  "changes": { "invalidateAll": ["package.json"] },
+  "checks": {
+    "format": { "command": "node tools/step.mjs format" },
+    "lint": { "command": "node tools/step.mjs lint", "paths": ["src/**", "test/**"] },
+    "typecheck": { "command": "node tools/step.mjs typecheck", "paths": ["src/**", "test/**"] },
+    "test": { "command": "node tools/step.mjs test", "paths": ["src/**", "test/**"] },
+    "build": {
+      "command": "node tools/step.mjs build",
+      "paths": ["src/**"],
+      "dependsOn": ["typecheck"]
+    },
+    "e2e": {
+      "command": "node tools/step.mjs e2e",
+      "paths": ["src/**", "e2e/**"],
+      "dependsOn": ["build"]
+    },
+    "docs": { "command": "node tools/step.mjs docs", "paths": ["docs/**"] }
+  }
+}

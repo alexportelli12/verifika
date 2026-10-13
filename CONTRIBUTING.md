@@ -33,6 +33,12 @@ npm run verify:ci       # the full quality gate, run by Verifika itself
 - User-visible changes need a `CHANGELOG.md` entry and documentation updates. If you change a CLI flag or output, update `skills/verifika/SKILL.md`; `npm run check:skill` will catch commands that no longer work.
 - The JSON output (`schemaVersion: 1`) and config format (`version: 1`) are public contracts. Additive changes only within a version.
 
+## Website
+
+The website at <https://alexportelli12.github.io/verifika/> is plain HTML, CSS and JavaScript in `site/`, with no build step. Preview it with any static server from the repository root (for example `python3 -m http.server --directory site`); every URL in it is relative, so it also works under the `/verifika/` path GitHub Pages serves it from. The [website workflow](.github/workflows/pages.yml) deploys `site/` when it changes on `main`; it needs Settings → Pages → Source set to "GitHub Actions" (a one-time setting). `site/` is not part of the npm package.
+
+The terminal recordings in `site/media/` are made from the published CLI by `scripts/demo/record.sh`, which needs Docker. It runs [VHS](https://github.com/charmbracelet/vhs) on the demo repository in `scripts/demo/fixture/`, whose checks print fixed output at fixed times, so recordings are repeatable (measured durations can differ by a tenth of a second). Re-record after a release that changes `human` output, and commit the new files.
+
 ## Releasing (maintainers)
 
 Pushing a `v<version>` tag runs the [release workflow](.github/workflows/release.yml). It checks that the tag matches `package.json` and is on `main`, runs the full gate, stages the tested tarball on npm through [trusted publishing](https://docs.npmjs.com/trusted-publishers) (OIDC, with provenance; no npm token is stored), and creates the GitHub release with the tarball attached. A staged version only becomes public when a maintainer approves it with 2FA, so a compromised workflow cannot publish on its own. Re-running a failed release is safe once its staged version has been approved or rejected: versions already on npm are skipped.

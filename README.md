@@ -183,6 +183,7 @@ Verifika ships an [agent skill](skills/verifika/SKILL.md) that teaches coding ag
 
 ## Documentation
 
+- [Website](https://alexportelli12.github.io/verifika/)
 - [Configuration reference](docs/configuration.md)
 - [CLI reference](docs/cli.md)
 - [Agent integration](docs/agents.md)
