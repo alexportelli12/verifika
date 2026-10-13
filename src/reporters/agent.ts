@@ -2,9 +2,8 @@ import type { RunResult } from "../types.ts";
 import {
   describeProblem,
   duration,
-  isFailureStatus,
   logsHint,
-  MAX_PREVIEWED_FAILURES,
+  previewDecider,
   problems,
   selectionLabel,
   verdict,
@@ -29,17 +28,11 @@ export function renderAgent(result: RunResult): string {
   if (summary.selected === 0)
     lines.push("Nothing to verify for these changes. Full run: vfk --all");
 
-  let previewed = 0;
+  const decide = previewDecider(result);
   for (const check of problems(result)) {
-    lines.push(`${check.name}: ${describeProblem(check)}`);
-    if (
-      isFailureStatus(check.status) &&
-      check.preview.length > 0 &&
-      previewed < MAX_PREVIEWED_FAILURES
-    ) {
-      previewed++;
-      lines.push(...check.preview.map((line) => `  ${line}`));
-    }
+    const preview = decide(check);
+    lines.push(`${check.name}: ${describeProblem(check)}${preview.note}`);
+    if (preview.show) lines.push(...check.preview.map((line) => `  ${line}`));
   }
   const hint = logsHint(result);
   if (hint) lines.push(`Run: ${hint}`);

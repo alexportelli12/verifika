@@ -52,9 +52,39 @@ describe("plan", () => {
   it("pulls in dependencies and explains why", async () => {
     const selection = await plan(config, { env: LOCAL }, changes("e2e/login.spec.ts"));
     expect(selected(selection)).toEqual(["format", "build", "e2e", "audit"]);
-    expect(selection.checks.find((check) => check.name === "build")?.reason).toBe(
-      "required by e2e",
+    expect(selection.checks.find((check) => check.name === "build")).toMatchObject({
+      reason: "required by e2e",
+      requiredBy: ["e2e"],
+    });
+    expect(selection.checks.find((check) => check.name === "e2e")).not.toHaveProperty("requiredBy");
+  });
+
+  it("names every check that requires a dependency, through chains", async () => {
+    const chained = parseConfig(
+      {
+        version: 1,
+        checks: {
+          gen: { command: "gen", paths: ["schema/**"] },
+          build: { command: "build", paths: ["src/**"], dependsOn: ["gen"] },
+          test: { command: "test", paths: ["test/**"], dependsOn: ["build"] },
+          pack: { command: "pack", paths: ["pack/**"], dependsOn: ["build"] },
+        },
+      },
+      "/repo/verifika.config.json",
     );
+    const selection = await plan(chained, { env: LOCAL }, changes("pack/x", "test/y"));
+    const byName = Object.fromEntries(selection.checks.map((check) => [check.name, check]));
+    expect(byName.build).toMatchObject({
+      reason: "required by test, pack",
+      requiredBy: ["test", "pack"],
+    });
+    expect(byName.gen).toMatchObject({ reason: "required by build", requiredBy: ["build"] });
+    // Selected on its own: no requiredBy, even though test also needs it.
+    const direct = await plan(chained, { env: LOCAL }, changes("src/a", "test/y"));
+    expect(direct.checks.find((check) => check.name === "build")).toMatchObject({
+      reason: "matched src/a",
+    });
+    expect(direct.checks.find((check) => check.name === "build")).not.toHaveProperty("requiredBy");
   });
 
   it("selects only always-run checks when nothing changed", async () => {

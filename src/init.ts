@@ -1,5 +1,5 @@
 import { existsSync, readFileSync } from "node:fs";
-import { writeFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { CONFIG_FILE } from "./config.ts";
 import { VerifikaError } from "./errors.ts";
@@ -23,6 +23,51 @@ interface StarterConfig {
   version: 1;
   changes: { invalidateAll: string[] };
   checks: Record<string, { command: string }>;
+}
+
+/** npm scripts `vfk init` adds: selective verification while working, the full gate for CI. */
+export const VERIFY_SCRIPTS: Readonly<Record<string, string>> = {
+  verify: "vfk",
+  "verify:ci": "vfk --all",
+};
+
+export interface ScriptsResult {
+  added: string[];
+  /** Scripts that already existed under those names and were left alone. */
+  kept: { name: string; command: string }[];
+}
+
+/**
+ * Adds the `verify` and `verify:ci` scripts to package.json where they are
+ * absent; existing scripts are never overwritten. Keeps the file's indentation,
+ * line endings, key order and trailing newline.
+ */
+export async function addVerifyScripts(root: string): Promise<ScriptsResult> {
+  const file = path.join(root, "package.json");
+  const raw = await readFile(file, "utf8");
+  const bom = raw.startsWith("\uFEFF") ? "\uFEFF" : "";
+  const text = raw.slice(bom.length);
+  const manifest = JSON.parse(text) as { scripts?: Record<string, string> };
+  const scripts = (manifest.scripts ??= {});
+  const result: ScriptsResult = { added: [], kept: [] };
+  for (const [name, command] of Object.entries(VERIFY_SCRIPTS)) {
+    const existing = scripts[name];
+    if (existing === undefined) {
+      scripts[name] = command;
+      result.added.push(name);
+    } else {
+      result.kept.push({ name, command: existing });
+    }
+  }
+  if (result.added.length === 0) return result;
+
+  // A one-line manifest stays on one line.
+  const indent = text.trim().includes("\n") ? (/^[ \t]+(?=")/m.exec(text)?.[0] ?? "  ") : "";
+  const newline = text.includes("\r\n") ? "\r\n" : "\n";
+  const trailing = /\r?\n$/.test(text) ? newline : "";
+  const json = JSON.stringify(manifest, null, indent).replace(/\n/g, newline);
+  await writeFile(file, `${bom}${json}${trailing}`);
+  return result;
 }
 
 /**

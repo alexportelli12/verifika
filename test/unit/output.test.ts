@@ -3,10 +3,18 @@ import { detectCi } from "../../src/ci.ts";
 import { formatSeconds } from "../../src/format.ts";
 import { OutputCapture, stripAnsi } from "../../src/preview.ts";
 import { renderAgent } from "../../src/reporters/agent.ts";
-import { humanReporter, plain, renderSummary } from "../../src/reporters/human.ts";
+import {
+  colors,
+  humanReporter,
+  plain,
+  renderStart,
+  renderSummary,
+  type SkipEstimate,
+} from "../../src/reporters/human.ts";
 import { jsonReporter } from "../../src/reporters/json.ts";
 import { renderPlan } from "../../src/reporters/plan.ts";
 import { quietReporter } from "../../src/reporters/quiet.ts";
+import type { StartInfo } from "../../src/reporters/reporter.ts";
 import { summarize, signalExitCode } from "../../src/runner.ts";
 import type { CheckResult, RunResult, Selection } from "../../src/types.ts";
 
@@ -106,13 +114,24 @@ describe("agent output", () => {
     expect(output).toContain("Run: vfk logs --failed\n");
   });
 
-  it("previews at most three failed checks", () => {
+  it("previews at most three failed checks and says where the others went", () => {
     const failures = ["a", "b", "c", "d"].map((name) =>
       check(name, { status: "failed", reason: "exit 1", preview: [`error in ${name}`] }),
     );
     const output = renderAgent(run(failures));
-    expect(output).toContain("error in c");
+    expect(output).toContain("c: exit 1\n  error in c\n");
     expect(output).not.toContain("error in d");
+    expect(output).toContain("d: exit 1 (preview omitted: vfk logs d)\n");
+    expect(renderAgent(run(failures, { latest: false }))).toContain(
+      "d: exit 1 (preview omitted: vfk logs d --run 20261012-000000-000-abcdef)\n",
+    );
+  });
+
+  it("does not claim an omitted preview for checks that had none", () => {
+    const failures = ["a", "b", "c", "d"].map((name) =>
+      check(name, { status: "failed", reason: "exit 1", preview: name === "d" ? [] : ["x"] }),
+    );
+    expect(renderAgent(run(failures))).toContain("d: exit 1\n");
   });
 
   it("describes selective runs and empty selections", () => {
@@ -204,6 +223,14 @@ describe("json output", () => {
   });
 });
 
+const allStart: StartInfo = {
+  runId: "r",
+  selection: { mode: "all", reason: "--all", changes: null, invalidatedBy: null, checks: [] },
+  selected: [],
+  concurrency: 4,
+  dependsOn: {},
+};
+
 describe("human output", () => {
   it("streams start and end lines and summarises", () => {
     const out: string[] = [];
@@ -218,17 +245,121 @@ describe("human output", () => {
         { name: "docs", selected: false, reason: "no matching changes", matchedFiles: [] },
       ],
     };
-    reporter.onStart?.({ runId: "r", selection, selected: ["lint"], concurrency: 2 });
+    reporter.onStart?.({
+      runId: "r",
+      selection,
+      selected: ["lint"],
+      concurrency: 2,
+      dependsOn: { lint: [] },
+    });
     reporter.onCheckStart?.("lint");
     reporter.onCheckEnd?.(check("lint"));
     reporter.onFinish(run([check("lint"), check("docs", { selected: false, status: "skipped" })]));
     expect(out.join("")).toBe(
       [
-        "verifika selective: 2 files changed since HEAD (abc1234); 1 skipped",
-        "skipped: docs",
+        "verifika · selective: 2 files changed since HEAD (abc1234) · 1 check · 2 parallel",
+        "1 skipped: docs",
         "▸ lint",
-        "✓ lint 1.2s",
+        "✓ lint  1.2s",
         "✓ 1 of 1 checks passed (4.3s)",
+        "",
+      ].join("\n"),
+    );
+  });
+
+  it("tells the user how to force an interrupt, on stderr", () => {
+    const err: string[] = [];
+    humanReporter({ out: () => undefined, err: (text) => err.push(text) }, plain).onInterrupt?.();
+    expect(err).toEqual(["stopping… (Ctrl-C again to force)\n"]);
+  });
+
+  it("lines durations up in a column", () => {
+    const out: string[] = [];
+    const reporter = humanReporter({ out: (text) => out.push(text), err: () => undefined }, plain);
+    reporter.onStart?.({ ...allStart, selected: ["lint", "typecheck"] });
+    reporter.onCheckEnd?.(check("lint", { durationMs: 12_400 }));
+    reporter.onCheckEnd?.(check("typecheck", { status: "failed", reason: "exit 2" }));
+    expect(out.join("")).toContain("✓ lint        12s\n✗ typecheck  1.2s  exit 2\n");
+  });
+
+  it("estimates the time saved by skipping checks", () => {
+    const selection: Selection = {
+      ...allStart.selection,
+      mode: "changed",
+      reason: "1 file changed since HEAD (abc1234)",
+      checks: ["lint", "test", "e2e"].map((name) => ({
+        name,
+        selected: name === "lint",
+        reason: "",
+        matchedFiles: [],
+      })),
+    };
+    const header = (skipEstimate?: SkipEstimate) =>
+      renderStart({ ...allStart, selection, selected: ["lint"] }, plain, skipEstimate);
+    expect(header({ knownMs: 40_000, unknown: 0 })).toContain(
+      "2 skipped (~40s saved): test, e2e\n",
+    );
+    expect(header({ knownMs: 40_000, unknown: 1 })).toContain(
+      "2 skipped (≥40s saved): test, e2e\n",
+    );
+    expect(header({ knownMs: 0, unknown: 2 })).toContain("2 skipped: test, e2e\n");
+    expect(header()).toContain("2 skipped: test, e2e\n");
+  });
+
+  it("says when nothing was selected", () => {
+    const selection: Selection = {
+      ...allStart.selection,
+      mode: "changed",
+      reason: "no files changed since HEAD (abc1234)",
+      checks: [{ name: "lint", selected: false, reason: "", matchedFiles: [] }],
+    };
+    expect(renderStart({ ...allStart, selection, selected: [] }, plain)).toBe(
+      [
+        "verifika · selective: no files changed since HEAD (abc1234) · 0 checks",
+        "1 skipped: lint",
+        "Nothing to verify for these changes. Full run: vfk --all",
+        "",
+      ].join("\n"),
+    );
+  });
+
+  it("shows the command and a rerun hint for failures, and why blocked checks did not run", () => {
+    const summary = renderSummary(
+      run([
+        check("build", { status: "failed", reason: "exit 2", exitCode: 2, preview: ["boom"] }),
+        check("test", {
+          status: "blocked",
+          reason: "dependency build did not pass",
+          blockedBy: "build",
+          log: null,
+          durationMs: null,
+        }),
+        check("e2e", {
+          status: "blocked",
+          reason: "dependency test did not pass",
+          blockedBy: "test",
+          log: null,
+          durationMs: null,
+        }),
+        check("deploy", {
+          status: "cancelled",
+          reason: "not started: build failed (fail-fast)",
+          log: null,
+          durationMs: null,
+        }),
+      ]),
+      plain,
+    );
+    expect(summary).toBe(
+      [
+        "",
+        "✗ build   npm run build → exit 2 · rerun: vfk -c build",
+        "    boom",
+        "○ test    not run: build failed",
+        "○ e2e     not run: test did not run",
+        "! deploy  not started: build failed (fail-fast)",
+        "✗ verification failed: 0 of 4 checks passed (4.3s)",
+        "Logs: vfk logs build",
         "",
       ].join("\n"),
     );
@@ -236,10 +367,24 @@ describe("human output", () => {
 
   it("summarises failures with previews and the logs command", () => {
     const summary = renderSummary(run([check("lint"), failure]), plain);
-    expect(summary).toContain("✗ typecheck: exit 2");
+    expect(summary).toContain(
+      "✗ typecheck  npm run typecheck → exit 2 · rerun: vfk -c typecheck\n",
+    );
     expect(summary).toContain("    src/a.ts(3,7): error TS2322");
     expect(summary).toContain("✗ verification failed: 1 of 2 checks passed (4.3s)");
     expect(summary).toContain("Logs: vfk logs typecheck");
+  });
+
+  it("notes failed checks whose preview was left out", () => {
+    const failures = ["a", "b", "c", "d"].map((name) =>
+      check(name, { status: "failed", reason: "exit 1", preview: [`error in ${name}`] }),
+    );
+    const summary = renderSummary(run(failures), plain);
+    expect(summary).toContain("    error in c\n");
+    expect(summary).not.toContain("error in d");
+    expect(summary).toContain(
+      "✗ d  npm run d → exit 1 · rerun: vfk -c d (preview omitted: vfk logs d)\n",
+    );
   });
 });
 
@@ -276,6 +421,155 @@ describe("plan output", () => {
         "",
       ].join("\n"),
     );
+  });
+
+  it("colours run and skip in human mode", () => {
+    const selection: Selection = {
+      mode: "changed",
+      reason: "1 file changed since HEAD (abc1234)",
+      changes: null,
+      invalidatedBy: null,
+      checks: [
+        { name: "build", selected: true, reason: "required by test", matchedFiles: [] },
+        { name: "docs", selected: false, reason: "no matching changes", matchedFiles: [] },
+      ],
+    };
+    const lines = renderPlan(selection, 10, colors).split("\n");
+    expect(lines).toContain("  \u001b[32mrun \u001b[39m  build  required by test");
+    expect(lines).toContain("\u001b[2m  skip  docs   no matching changes\u001b[22m");
+  });
+});
+
+describe("OutputCapture with real tool output", () => {
+  const previewOf = (output: string, limit = 10) => {
+    const capture = new OutputCapture(limit);
+    capture.write("out", output);
+    return capture.preview();
+  };
+
+  it("keeps ESLint errors with their file heading and the summary", () => {
+    const output = [
+      "",
+      "> app@1.2.3 lint",
+      "> eslint .",
+      "",
+      "",
+      "/repo/src/cart.ts",
+      "  4:7   warning  Unexpected console statement            no-console",
+      "  12:9  error    'bad' is assigned a value but never used  no-unused-vars",
+      "",
+      "/repo/test/zz.mjs",
+      "  1:9  error  'bad' is assigned a value but never used  no-unused-vars",
+      "  2:1  warning  Unexpected console statement  no-console",
+      "",
+      "✖ 4 problems (2 errors, 2 warnings)",
+      "",
+    ].join("\n");
+    expect(previewOf(output)).toEqual([
+      "/repo/src/cart.ts",
+      "  12:9  error    'bad' is assigned a value but never used  no-unused-vars",
+      "/repo/test/zz.mjs",
+      "  1:9  error  'bad' is assigned a value but never used  no-unused-vars",
+      "✖ 4 problems (2 errors, 2 warnings)",
+    ]);
+  });
+
+  it("keeps tsc errors in both plain and pretty formats", () => {
+    expect(
+      previewOf(
+        [
+          "> app@1.2.3 typecheck /repo",
+          "> tsc --noEmit",
+          "",
+          "src/cart.ts(14,7): error TS2322: Type 'string' is not assignable to type 'number'.",
+          "src/api.ts(3,1): error TS2304: Cannot find name 'fetchCart'.",
+          "",
+        ].join("\n"),
+      ),
+    ).toEqual([
+      "src/cart.ts(14,7): error TS2322: Type 'string' is not assignable to type 'number'.",
+      "src/api.ts(3,1): error TS2304: Cannot find name 'fetchCart'.",
+    ]);
+    expect(
+      previewOf(
+        [
+          "src/cart.ts:14:7 - error TS2322: Type 'string' is not assignable to type 'number'.",
+          "",
+          '14 const total: number = "0";',
+          "         ~~~~~",
+          "",
+          "Found 1 error in src/cart.ts:14",
+          "",
+        ].join("\n"),
+      ),
+    ).toEqual([
+      "src/cart.ts:14:7 - error TS2322: Type 'string' is not assignable to type 'number'.",
+    ]);
+  });
+
+  it("shows prettier's file list without the package-manager banner", () => {
+    for (const banner of [
+      ["> app@1.2.3 format:check", "> prettier --check ."],
+      ["> @acme/app@1.2.3 format:check /home/me/app", "> prettier --check ."],
+      ["yarn run v1.22.22", "$ prettier --check ."],
+    ]) {
+      expect(
+        previewOf(
+          [
+            ...banner,
+            "Checking formatting...",
+            "[warn] src/cart.ts",
+            "[warn] Code style issues found in the above file. Run Prettier with --write to fix.",
+            "",
+          ].join("\n"),
+          4,
+        ),
+      ).toEqual([
+        "Checking formatting...",
+        "[warn] src/cart.ts",
+        "[warn] Code style issues found in the above file. Run Prettier with --write to fix.",
+      ]);
+    }
+  });
+
+  it("keeps vitest's failed test, assertion and message", () => {
+    const output = [
+      "",
+      "> app@1.2.3 test",
+      "> vitest run",
+      "",
+      " RUN  v3.2.4 /repo",
+      "",
+      " ❯ test/cart.test.ts (2 tests | 1 failed) 5ms",
+      "   × cart > adds items 3ms",
+      "     → expected 2 to be 3 // Object.is equality",
+      "",
+      "⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯",
+      "",
+      " FAIL  test/cart.test.ts > cart > adds items",
+      "AssertionError: expected 2 to be 3 // Object.is equality",
+      "",
+      "- Expected",
+      "+ Received",
+      "",
+      " ❯ test/cart.test.ts:5:15",
+      "      5|   expect(1 + 1).toBe(3);",
+      "       |               ^",
+      "",
+      " Test Files  1 failed (1)",
+      "      Tests  1 failed | 1 passed (2)",
+      "",
+    ].join("\n");
+    expect(previewOf(output)).toEqual([
+      "   × cart > adds items 3ms",
+      "     → expected 2 to be 3 // Object.is equality",
+      " FAIL  test/cart.test.ts > cart > adds items",
+      "AssertionError: expected 2 to be 3 // Object.is equality",
+    ]);
+  });
+
+  it("does not mistake quoted output for a banner", () => {
+    expect(previewOf("> not a banner\nplain line\n")).toEqual(["> not a banner", "plain line"]);
   });
 });
 

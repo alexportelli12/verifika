@@ -1,11 +1,13 @@
-import { existsSync } from "node:fs";
+import { chmodSync, existsSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { readTail } from "../../src/logs.ts";
+import { describeTime, hyperlink, readTail } from "../../src/logs.ts";
+import { DEFAULT_PAGER, pagerAvailable, pagerCommand } from "../../src/pager.ts";
 import { descendantsOf, execCheck } from "../../src/process.ts";
 import {
   createRun,
   createRunId,
+  estimateSkipped,
   logPath,
   pruneRuns,
   readLatest,
@@ -33,6 +35,65 @@ describe("run ids", () => {
     expect(logPath("20260102-030405-000-abcdef", "lint")).toBe(
       ".verifika/runs/20260102-030405-000-abcdef/lint.log",
     );
+  });
+});
+
+describe("estimateSkipped", () => {
+  const runWith = (id: string, checks: Partial<RunResult["checks"][number]>[]) => ({
+    [`.verifika/runs/${id}/run.json`]: JSON.stringify({ runId: id, checks }),
+  });
+
+  it("uses each check's most recent completed duration", async () => {
+    const root = tempDir();
+    writeFiles(root, {
+      ...runWith("20260101-000000-000-aaaaaa", [
+        { name: "test", status: "passed", durationMs: 30_000 },
+        { name: "e2e", status: "failed", durationMs: 50_000 },
+      ]),
+      ...runWith("20260102-000000-000-bbbbbb", [
+        { name: "test", status: "failed", durationMs: 20_000 },
+        { name: "e2e", status: "interrupted", durationMs: 1_000 },
+        { name: "lint", status: "skipped", durationMs: null },
+      ]),
+      ".verifika/runs/20260103-000000-000-cccccc/run.json": "{ not json",
+    });
+    expect(await estimateSkipped(root, ["test", "e2e"])).toEqual({ knownMs: 70_000, unknown: 0 });
+    expect(await estimateSkipped(root, ["test", "lint"])).toEqual({ knownMs: 20_000, unknown: 1 });
+  });
+
+  it("knows nothing without recorded runs", async () => {
+    expect(await estimateSkipped(tempDir(), ["test"])).toEqual({ knownMs: 0, unknown: 1 });
+  });
+});
+
+describe("logs presentation", () => {
+  it("describes start times in local time, relative to now", () => {
+    const now = new Date(2026, 9, 13, 1, 15, 0);
+    expect(describeTime(new Date(2026, 9, 13, 1, 12, 30), now)).toBe("today 01:12, 2m ago");
+    expect(describeTime(new Date(2026, 9, 13, 1, 14, 50), now)).toBe("today 01:14, 10s ago");
+    expect(describeTime(new Date(2026, 9, 13, 1, 15, 0), now)).toBe("today 01:15, just now");
+    expect(describeTime(new Date(2026, 9, 12, 23, 40), now)).toBe("yesterday 23:40, 1h ago");
+    expect(describeTime(new Date(2026, 9, 9, 8, 5), now)).toBe("2026-10-09 08:05, 3d ago");
+  });
+
+  it("links files with OSC 8", () => {
+    const link = hyperlink("a.log", path.resolve("/tmp/a b.log"));
+    // eslint-disable-next-line no-control-regex
+    expect(link).toMatch(/^\u001b\]8;;file:\/\/\S*a%20b\.log\u001b\\a\.log\u001b\]8;;\u001b\\$/);
+  });
+
+  it("uses $PAGER, or less, and checks that the program exists", () => {
+    expect(pagerCommand({})).toBe(DEFAULT_PAGER);
+    expect(pagerCommand({ PAGER: "  " })).toBe(DEFAULT_PAGER);
+    expect(pagerCommand({ PAGER: "more" })).toBe("more");
+    const bin = tempDir();
+    const program = process.platform === "win32" ? "mypager.cmd" : "mypager";
+    writeFiles(bin, { [program]: "" });
+    chmodSync(path.join(bin, program), 0o755);
+    expect(pagerAvailable("mypager -R", { PATH: bin, PATHEXT: ".CMD" })).toBe(true);
+    expect(pagerAvailable(`"${path.join(bin, program)}" -R`, { PATH: "" })).toBe(true);
+    expect(pagerAvailable("nope -R", { PATH: bin, PATHEXT: ".CMD" })).toBe(false);
+    expect(pagerAvailable("", { PATH: bin })).toBe(false);
   });
 });
 

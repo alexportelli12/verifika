@@ -1,4 +1,5 @@
 import type { ChangeStatus, Selection, VerifikaConfig } from "../types.ts";
+import { plain, type Style } from "./human.ts";
 import { selectionLabel } from "./reporter.ts";
 
 const STATUS_LETTER: Record<ChangeStatus, string> = {
@@ -10,7 +11,7 @@ const STATUS_LETTER: Record<ChangeStatus, string> = {
 };
 
 /** Text rendering of a plan. `maxFiles` bounds the changed-file list. */
-export function renderPlan(selection: Selection, maxFiles: number): string {
+export function renderPlan(selection: Selection, maxFiles: number, style: Style = plain): string {
   const skipped = selection.checks.filter((check) => !check.selected).length;
   const lines = [`Plan: ${selectionLabel(selection, skipped)}`];
   const files = selection.changes?.files;
@@ -24,9 +25,8 @@ export function renderPlan(selection: Selection, maxFiles: number): string {
   lines.push("Checks:");
   const width = Math.max(...selection.checks.map((check) => check.name.length));
   for (const check of selection.checks) {
-    lines.push(
-      `  ${check.selected ? "run " : "skip"}  ${check.name.padEnd(width)}  ${check.reason}`,
-    );
+    const row = `${check.name.padEnd(width)}  ${check.reason}`;
+    lines.push(check.selected ? `  ${style.green("run ")}  ${row}` : style.dim(`  skip  ${row}`));
   }
   return `${lines.join("\n")}\n`;
 }

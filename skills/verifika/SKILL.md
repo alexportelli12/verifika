@@ -10,7 +10,7 @@ Verifika runs a repository's configured checks (lint, typecheck, tests, build, .
 
 ## Is it set up here?
 
-Look for `verifika.config.json` in the repository root (or the package directory in a monorepo). Its `checks` object lists every check name and command. Run the CLI the way the repository does: `npx vfk` when it is a devDependency, `vfk` when installed globally, or a documented wrapper script such as `npm run verify`. `vfk` is short for `verifika`; both commands are identical. The examples below write `vfk`.
+Look for `verifika.config.json` in the repository root (or the package directory in a monorepo). Its `checks` object lists every check name and command. Run the CLI the way the repository does: `npx vfk` when it is a devDependency, `vfk` when installed globally, or the repository's scripts. Projects set up with the init command have `npm run verify` (runs `vfk`: selective) and `npm run verify:ci` (runs `vfk --all`: the full gate). `npm run verify` is not the full gate. `vfk` is short for `verifika`; both commands are identical. The examples below write `vfk`.
 
 ## Workflow
 
@@ -34,7 +34,7 @@ Look for `verifika.config.json` in the repository root (or the package directory
    vfk --check typecheck
    ```
 
-4. **Before claiming the task is complete, committing, or opening a pull request**, always run the full suite:
+4. **Before claiming the task is complete, committing, or opening a pull request**, always run the full suite (`npm run verify:ci` where that script exists):
 
    ```sh
    vfk --all
@@ -59,7 +59,22 @@ On failure, one line per problem, a short preview, and the command for full logs
 FAIL 3/4 (3.2s) full run (--all)
 typecheck: exit 2
   src/cart.ts(14,7): error TS2322: Type 'string' is not assignable to type 'number'.
-Run: verifika logs typecheck
+Run: vfk logs typecheck
+```
+
+Previews are shown for at most three failed checks. Any further failed check says where its output is instead:
+
+```text
+FAIL 1/5 (9.8s) full run (--all)
+format: exit 1
+  [warn] src/cart.ts
+lint: exit 1
+  /repo/src/cart.ts
+    12:9  error  'total' is assigned a value but never used  no-unused-vars
+typecheck: exit 2
+  src/cart.ts(14,7): error TS2322: Type 'string' is not assignable to type 'number'.
+test: exit 1 (preview omitted: vfk logs test)
+Run: vfk logs --failed
 ```
 
 | Exit code | Meaning                                                                |
@@ -83,7 +98,7 @@ Check statuses: `passed`, `failed`, `timed_out`, `error` (could not start, or le
 ## Rules
 
 - Do not claim success unless you saw `PASS` and exit code 0 from a finished run. Say what ran: "selective verification passed (2 checks)" is not "all checks pass".
-- A selective `PASS` only covers the checks it selected. Skipped checks were not verified. Run `vfk --all` before delivery, every time.
+- A selective `PASS` only covers the checks it selected. Skipped checks were not verified. Run `vfk --all` (or `npm run verify:ci`) before delivery, every time; `npm run verify` is selective and does not count.
 - `PASS 0/0` means nothing matched your changes and nothing was verified.
 - Do not read logs of passing checks or use `vfk logs` after a `PASS`; there is nothing to diagnose.
 - Do not edit `verifika.config.json`, remove checks, narrow `paths`, raise timeouts, or pass `--check` to dodge a failing check, unless the user asked for that change.

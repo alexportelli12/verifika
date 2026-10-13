@@ -3,22 +3,28 @@ import path from "node:path";
 import { parseArgs, type ParseArgsConfig } from "node:util";
 import { findConfigFile, loadConfig } from "./config.ts";
 import { ExitCode, VerifikaError } from "./errors.ts";
-import { initConfig } from "./init.ts";
-import { showLogs } from "./logs.ts";
+import { addVerifyScripts, initConfig, VERIFY_SCRIPTS } from "./init.ts";
+import { showLogs, type LogsRequest } from "./logs.ts";
+import { pagerAvailable, pagerCommand } from "./pager.ts";
 import { plan, type PlanRequest } from "./planner.ts";
 import { killAllNow } from "./process.ts";
 import { agentReporter } from "./reporters/agent.ts";
-import { colors, humanReporter, plain } from "./reporters/human.ts";
+import { detectCi } from "./ci.ts";
+import { colors, humanReporter, plain, type SkipEstimate, type Style } from "./reporters/human.ts";
 import { jsonReporter } from "./reporters/json.ts";
+import { liveReporter, type LiveTerminal } from "./reporters/live.ts";
 import { planJson, renderPlan } from "./reporters/plan.ts";
 import { quietReporter } from "./reporters/quiet.ts";
 import { OUTPUT_MODES, type Output, type OutputMode, type Reporter } from "./reporters/reporter.ts";
 import { runVerification } from "./runner.ts";
+import { estimateSkipped } from "./runs.ts";
 
 export interface Io extends Output {
   cwd: string;
   env: NodeJS.ProcessEnv;
   isTTY: boolean;
+  /** Stdout as a terminal, when it is one; enables the live status block in human mode. */
+  terminal?: LiveTerminal;
 }
 
 const COMMANDS = ["run", "plan", "logs", "init", "help"] as const;
@@ -33,6 +39,7 @@ Usage:
   vfk plan [options]              Show which checks would run and why
   vfk logs [check...]             Show logs from the latest run
   vfk init [--force]              Create verifika.config.json from package.json scripts
+                                  and add "verify"/"verify:ci" scripts if absent
 
 Selection (run, plan):
       --all                       Run every check
@@ -47,11 +54,15 @@ Execution (run):
       --fail-fast                 Stop everything after the first failure
       --no-fail-fast              Run every selected check even after a failure
       --preview <lines>           Failure preview lines per check (default ${DEFAULT_PREVIEW_LINES}, 0 = off)
+      --no-live                   Print progress line by line instead of a live
+                                  status block (or set VERIFIKA_LIVE=0)
 
 Logs:
       --failed                    Print logs of every failed check
       --tail <lines>              Print only the last lines of each log
       --run <id>                  Read a specific run instead of the latest
+      --no-pager                  Print logs directly instead of through $PAGER
+                                  (paging only happens on a terminal)
 
 Output:
       --mode <mode>               human | agent | json | quiet
@@ -89,6 +100,7 @@ const OPTIONS = {
     "fail-fast": { type: "boolean" },
     "no-fail-fast": { type: "boolean" },
     preview: { type: "string" },
+    "no-live": { type: "boolean" },
   },
   plan: { ...SHARED, ...SELECTION },
   logs: {
@@ -96,6 +108,7 @@ const OPTIONS = {
     failed: { type: "boolean" },
     tail: { type: "string" },
     run: { type: "string" },
+    "no-pager": { type: "boolean" },
   },
   init: { ...SHARED, force: { type: "boolean" } },
   help: SHARED,
@@ -147,6 +160,9 @@ export async function main(argv: string[], io: Io): Promise<number> {
           ...(values.run !== undefined ? { runId: values.run as string } : {}),
           ...(values.tail !== undefined ? { tail: integerOption(values.tail, "--tail", 1) } : {}),
           stripAnsi: !io.isTTY,
+          env: io.env,
+          // Agents in a pseudo-terminal must never get a pager waiting for a keypress.
+          ...(mode === "human" ? logsDisplay(io, values["no-pager"] === true) : {}),
         },
         io,
       );
@@ -175,7 +191,8 @@ export async function main(argv: string[], io: Io): Promise<number> {
 
     if (command === "plan") {
       if (mode === "json") io.out(planJson(selection, config));
-      else if (mode !== "quiet") io.out(renderPlan(selection, mode === "human" ? 50 : 20));
+      else if (mode === "human") io.out(renderPlan(selection, 50, humanStyle(io)));
+      else if (mode === "agent") io.out(renderPlan(selection, 20));
       return ExitCode.Passed;
     }
 
@@ -192,20 +209,34 @@ export async function main(argv: string[], io: Io): Promise<number> {
         ? integerOption(values.preview, "--preview", 0)
         : DEFAULT_PREVIEW_LINES;
 
-    const result = await withInterruptHandling((signal) =>
-      runVerification({
-        config,
-        selection,
-        concurrency,
-        failFast,
-        previewLines,
-        signal,
-        reporter: reporterFor(mode, io),
-        version: version(),
-        env: io.env,
-      }),
-    );
-    return result.exitCode;
+    const skipped = selection.checks.filter((check) => !check.selected).map((check) => check.name);
+    const reporter = reporterFor(mode, io, {
+      live: values["no-live"] !== true,
+      // Only people see the estimate; other modes skip reading earlier runs.
+      ...(mode === "human" && skipped.length > 0
+        ? { skipEstimate: await estimateSkipped(config.root, skipped) }
+        : {}),
+    });
+    try {
+      const result = await withInterruptHandling(
+        () => reporter.onInterrupt?.(),
+        (signal) =>
+          runVerification({
+            config,
+            selection,
+            concurrency,
+            failFast,
+            previewLines,
+            signal,
+            reporter,
+            version: version(),
+            env: io.env,
+          }),
+      );
+      return result.exitCode;
+    } finally {
+      reporter.dispose?.();
+    }
   } catch (error) {
     if (error instanceof VerifikaError) {
       reportError(error, mode, io);
@@ -228,6 +259,20 @@ async function runInit(io: Io, values: Values): Promise<number> {
   const root = values.config ? path.dirname(path.resolve(io.cwd, values.config as string)) : io.cwd;
   const { file, checks } = await initConfig(root, Boolean(values.force));
   io.out(`Created ${path.relative(io.cwd, file) || file} with checks: ${checks.join(", ")}\n`);
+  const scripts = await addVerifyScripts(root);
+  if (scripts.added.length > 0) {
+    const added = scripts.added.map((name) => `"${name}": "${VERIFY_SCRIPTS[name]}"`);
+    io.out(`Added package.json scripts: ${added.join(", ")}\n`);
+  }
+  for (const { name, command } of scripts.kept) {
+    if (command === VERIFY_SCRIPTS[name]) {
+      io.out(`package.json already has "${name}": "${command}"\n`);
+      continue;
+    }
+    io.out(
+      `Kept the existing "${name}" script (${command}); to use Verifika, change it to "${VERIFY_SCRIPTS[name]}" once the checks cover everything it runs\n`,
+    );
+  }
   io.out(
     'Review the commands, add "paths" to checks that only some files affect, format the file if your repository checks formatting, then run: vfk plan\n',
   );
@@ -288,14 +333,26 @@ function guessMode(argv: string[], io: Io): OutputMode {
       : "agent";
 }
 
-function reporterFor(mode: OutputMode, io: Io): Reporter {
+function reporterFor(
+  mode: OutputMode,
+  io: Io,
+  options: { live: boolean; skipEstimate?: SkipEstimate },
+): Reporter {
   switch (mode) {
     case "human": {
-      const color =
-        io.isTTY && !io.env.NO_COLOR
-          ? true
-          : Boolean(io.env.FORCE_COLOR && io.env.FORCE_COLOR !== "0");
-      return humanReporter(io, color ? colors : plain, { heartbeat: io.isTTY });
+      const style = humanStyle(io);
+      // The live block redraws in place, so it needs a real, capable terminal that
+      // nobody is logging; everywhere else the line reporter is the fallback.
+      const live =
+        options.live &&
+        io.terminal !== undefined &&
+        io.isTTY &&
+        !detectCi(io.env).ci &&
+        io.env.TERM !== "dumb" &&
+        !isOff(io.env.VERIFIKA_LIVE);
+      const estimate = options.skipEstimate ? { skipEstimate: options.skipEstimate } : {};
+      if (live && io.terminal) return liveReporter(io.terminal, style, estimate);
+      return humanReporter(io, style, { heartbeat: io.isTTY, ...estimate });
     }
     case "agent":
       return agentReporter(io);
@@ -304,6 +361,31 @@ function reporterFor(mode: OutputMode, io: Io): Reporter {
     case "quiet":
       return quietReporter(io);
   }
+}
+
+/**
+ * On a terminal, `vfk logs` speaks to a person: local relative times, clickable
+ * log paths (not in CI, whose log viewers show escape codes), and a pager.
+ */
+function logsDisplay(io: Io, noPager: boolean): Pick<LogsRequest, "display" | "pager"> {
+  if (!io.isTTY) return {};
+  const capable = !detectCi(io.env).ci && io.env.TERM !== "dumb";
+  const pager = pagerCommand(io.env);
+  return {
+    display: { now: new Date(), hyperlinks: capable && !isOff(io.env.VERIFIKA_HYPERLINKS) },
+    ...(noPager || !pagerAvailable(pager, io.env) ? {} : { pager }),
+  };
+}
+
+/** Colour on a terminal unless NO_COLOR is set; FORCE_COLOR enables it elsewhere. */
+function humanStyle(io: Io): Style {
+  const color =
+    io.isTTY && !io.env.NO_COLOR ? true : Boolean(io.env.FORCE_COLOR && io.env.FORCE_COLOR !== "0");
+  return color ? colors : plain;
+}
+
+function isOff(value: string | undefined): boolean {
+  return value !== undefined && ["0", "false", "no", "off"].includes(value.trim().toLowerCase());
 }
 
 function reportError(error: VerifikaError, mode: OutputMode, io: Io): void {
@@ -325,13 +407,17 @@ function reportError(error: VerifikaError, mode: OutputMode, io: Io): void {
  * gracefully; a second one kills them immediately.
  */
 async function withInterruptHandling<T>(
+  onFirstSignal: () => void,
   operation: (signal: AbortSignal) => Promise<T>,
 ): Promise<T> {
   const controller = new AbortController();
   const signals: NodeJS.Signals[] = ["SIGINT", "SIGTERM", "SIGHUP"];
   const onSignal = (signal: NodeJS.Signals) => {
     if (controller.signal.aborted) killAllNow();
-    else controller.abort(signal);
+    else {
+      onFirstSignal();
+      controller.abort(signal);
+    }
   };
   for (const signal of signals) process.on(signal, onSignal);
   try {

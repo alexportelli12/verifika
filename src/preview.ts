@@ -7,6 +7,8 @@ const REDRAW = /\u001b\[\d*A|\u001b\[2K/;
 /** Markers test runners and compilers print for the failure itself. Case-sensitive on purpose. */
 const DEFINITE_FAILURE =
   /\bFAILED\b|^\s*FAIL\b|\bAssertionError\b|^\s*Expected\b|\berror TS\d+|\[ERROR\]|^\s*[✗✖×]|\bTraceback\b|\bpanicked\b/;
+/** ESLint's stylish format: `  1:9  error  'x' is assigned a value but never used  no-unused-vars`. */
+const ESLINT_ERROR = /^\s+\d+:\d+\s+error\s/;
 /** Exception lines; passing tests that exercise error paths print these too. */
 const EXCEPTION = /\b\w*Error:/;
 /** Lines that often relate to a failure but also appear in passing output. */
@@ -19,6 +21,13 @@ const JSON_LINE = /^\s*[[{]"/;
 /** Package-manager wrapper noise that repeats the exit code without saying what failed. */
 const WRAPPER_NOISE =
   /^(?:npm (?:error|ERR!|warn|notice)|\s*ELIFECYCLE\b|error Command failed with exit code|info Visit https:\/\/yarnpkg)/;
+/**
+ * First line of a package-manager script banner: npm and pnpm print `> pkg@1.2.3 script`
+ * (pnpm adds the directory), yarn 1 prints `yarn run v1.22.19`. The next line repeats the command.
+ */
+const SCRIPT_BANNER = /^(?:> \S*@\S+ \S|yarn run v\d)/;
+/** The command line that follows a banner: `> eslint .` (npm, pnpm) or `$ eslint .` (yarn). */
+const BANNER_COMMAND = /^[>$] \S/;
 const MAX_LINE_CHARS = 200;
 /** Partial lines are truncated beyond this, so one giant line cannot grow memory. */
 const MAX_PENDING_CHARS = 4_096;
@@ -37,10 +46,12 @@ interface Entry {
 /**
  * Keeps a bounded excerpt of command output for failure previews. In order of
  * preference it returns lines that clearly mark a failure (FAIL/FAILED,
- * assertion and compiler errors) with the line after each, then exception lines
+ * assertion and compiler errors) with the line after each, and ESLint errors
+ * under their file heading; then exception lines
  * (`TypeError: ...`), then lines that merely mention errors, then the last lines
  * of output.
  *
+ * Package-manager script banners (`> pkg@1.2.3 lint` / `> eslint .`) are dropped.
  * Progress output is collapsed: terminal redraws and progress counters rewritten
  * on new lines replace the previous line. Memory use is O(limit) regardless of
  * how much the command prints.
@@ -56,9 +67,12 @@ export class OutputCapture {
   private lastShape: string | null = null;
   /** Most recent unindented, non-matching line, e.g. the file name ESLint prints above its errors. */
   private header: Entry | null = null;
-  private headerShown = false;
+  /** Lists that already hold the current header, so each group shows it once. */
+  private readonly headerShownIn = new Set<Entry[]>();
   /** Whether the next indented line continues a failure marker (e.g. the message under a FAILED test). */
   private continueDefinite = false;
+  /** Whether the previous line opened a package-manager script banner. */
+  private inBanner = false;
 
   constructor(limit: number) {
     this.limit = Math.max(0, limit);
@@ -94,6 +108,9 @@ export class OutputCapture {
     const redraw = REDRAW.test(content);
     const line = stripAnsi(content.slice(content.lastIndexOf("\r") + 1)).trimEnd();
     if (line.trim() === "" || WRAPPER_NOISE.test(line)) return;
+    const banner = SCRIPT_BANNER.test(line) || (this.inBanner && BANNER_COMMAND.test(line));
+    this.inBanner = banner && SCRIPT_BANNER.test(line);
+    if (banner) return;
     const text = line.length > MAX_LINE_CHARS ? `${line.slice(0, MAX_LINE_CHARS - 1)}…` : line;
 
     // Progress counters ("Executed 12 of 756", "40%") rewritten on new lines are one line;
@@ -110,11 +127,16 @@ export class OutputCapture {
 
     const indented = /^\s/.test(line);
     const isJson = JSON_LINE.test(line);
-    const definite = !isJson && DEFINITE_FAILURE.test(line);
+    const eslint = ESLINT_ERROR.test(line);
+    const definite = !isJson && (eslint || DEFINITE_FAILURE.test(line));
     const exception = !isJson && !definite && EXCEPTION.test(line);
     const weak = !isJson && !definite && !exception && WEAK_FAILURE.test(line);
 
-    if (definite || (this.continueDefinite && indented && !/^\s*at\s/.test(line))) {
+    if (eslint) {
+      this.pushWithHeader(this.definite, entry, indented);
+      // The line after an ESLint error is the next problem, possibly a warning: not a continuation.
+      this.continueDefinite = false;
+    } else if (definite || (this.continueDefinite && indented && !/^\s*at\s/.test(line))) {
       push(this.definite, entry, this.limit, false);
       this.continueDefinite = definite;
     } else {
@@ -124,17 +146,17 @@ export class OutputCapture {
     }
     if (!indented && !definite && !exception && !weak && !isJson) {
       this.header = entry;
-      this.headerShown = false;
+      this.headerShownIn.clear();
     }
     push(this.tail, entry, this.limit, true);
   }
 
   /** An indented failure usually belongs to the heading above it; keep that context once. */
   private pushWithHeader(list: Entry[], entry: Entry, indented: boolean): void {
-    if (indented && this.header && !this.headerShown && list.length + 2 <= this.limit) {
+    if (indented && this.header && !this.headerShownIn.has(list) && list.length + 2 <= this.limit) {
       push(list, this.header, this.limit, false);
     }
-    this.headerShown = true;
+    this.headerShownIn.add(list);
     push(list, entry, this.limit, false);
   }
 
@@ -157,5 +179,42 @@ function push(list: Entry[], entry: Entry, limit: number, rolling: boolean): voi
   else if (rolling) {
     list.shift();
     list.push(entry);
+  }
+}
+
+/**
+ * Follows a stream of output and reports its latest non-empty line, including a
+ * line still being written (progress bars redraw with `\r` and may never end
+ * one). Reports only changes, ANSI-stripped. Memory is bounded like OutputCapture.
+ */
+export class LastLine {
+  private readonly report: (line: string) => void;
+  private pending = "";
+  private last = "";
+
+  constructor(report: (line: string) => void) {
+    this.report = report;
+  }
+
+  write(text: string): void {
+    const buffer = this.pending + text;
+    const lines = buffer.split("\n");
+    const rest = lines.pop() ?? "";
+    this.pending = rest.length > MAX_PENDING_CHARS ? rest.slice(-MAX_PENDING_CHARS) : rest;
+    for (const candidate of [rest, ...lines.reverse()]) {
+      const content = candidate.endsWith("\r") ? candidate.slice(0, -1) : candidate;
+      // Control characters (BEL, SO/SI, backspace) would act on the terminal at every redraw.
+      const line = stripAnsi(content.slice(content.lastIndexOf("\r") + 1))
+        .replace(/\t/g, " ")
+        // eslint-disable-next-line no-control-regex
+        .replace(/[\u0000-\u001f\u007f]/g, "")
+        .trim();
+      if (line === "") continue;
+      if (line !== this.last) {
+        this.last = line;
+        this.report(line);
+      }
+      return;
+    }
   }
 }

@@ -3,6 +3,7 @@ import { existsSync, readdirSync, readFileSync, utimesSync, writeFileSync } from
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
+import { main } from "../../src/main.ts";
 import type { RunResult } from "../../src/types.ts";
 import {
   CLI,
@@ -563,6 +564,54 @@ describe("verifika logs", () => {
     expect(unknown.stderr).toContain("no check named nope");
   });
 
+  it("pages log contents on a terminal, never with --tail or --no-pager, and falls back without a pager", async () => {
+    const root = project({ build: { command: "node check.mjs fail 1 broken" } });
+    await runCli(root, ["--all"]);
+    const pager = path.join(root, "pager.mjs");
+    const paged = path.join(root, "paged.txt");
+    writeFileSync(
+      pager,
+      'import { createWriteStream } from "node:fs";\nprocess.stdin.pipe(createWriteStream(process.argv[2]));\n',
+    );
+    const terminal = async (args: string[], env: NodeJS.ProcessEnv) => {
+      let out = "";
+      const code = await main(args, {
+        cwd: root,
+        env: cleanEnv(env),
+        isTTY: true,
+        out: (text) => (out += text),
+        err: () => undefined,
+      });
+      return { code, out };
+    };
+    const withPager = { PAGER: `"${process.execPath}" "${pager}" "${paged}"` };
+
+    const content = "starting up\nnoise line\nsrc/app.ts(3,7): error TS2322: broken\n";
+    const logs = await terminal(["logs", "build"], withPager);
+    expect(logs).toEqual({ code: 0, out: "" });
+    expect(readFileSync(paged, "utf8")).toBe(content);
+
+    for (const args of [
+      ["logs", "build", "--tail", "5"],
+      ["logs", "build", "--no-pager"],
+      ["logs", "build", "--mode", "agent"],
+    ]) {
+      expect((await terminal(args, withPager)).out).toBe(content);
+    }
+    // An agent in a pseudo-terminal must never get a pager.
+    expect((await terminal(["logs", "build"], { ...withPager, VERIFIKA_MODE: "agent" })).out).toBe(
+      content,
+    );
+    const missing = await terminal(["logs", "build"], { PAGER: "no-such-pager-anywhere -R" });
+    expect(missing.out).toBe(content);
+
+    // The summary is never paged; on a terminal it shows local, relative time.
+    const summary = await terminal(["logs"], { ...withPager, VERIFIKA_HYPERLINKS: "0" });
+    expect(summary.out).toMatch(/^Run \S+ · failed · \S+ · today \d\d:\d\d, (just now|\d+s ago)\n/);
+    expect(summary.out).not.toContain("\u001b]8;;");
+    expect((await terminal(["logs"], withPager)).out).toContain("\u001b]8;;file://");
+  });
+
   it("strips forced colour codes from logs printed to a pipe", async () => {
     const root = project({ build: { command: "node check.mjs color" } });
     const run = await runCli(root, ["--all"]);
@@ -709,9 +758,31 @@ describe("verifika init, help and version", () => {
       test: { command: "pnpm run test" },
       build: { command: "pnpm run build" },
     });
+    expect(result.stdout).toContain(
+      'Added package.json scripts: "verify": "vfk", "verify:ci": "vfk --all"\n',
+    );
+    const manifest = JSON.parse(readFileSync(path.join(root, "package.json"), "utf8"));
+    expect(manifest.scripts).toMatchObject({ verify: "vfk", "verify:ci": "vfk --all" });
     expect((await runCli(root, ["plan"])).code).toBe(0);
     expect((await runCli(root, ["init"])).code).toBe(2);
-    expect((await runCli(root, ["init", "--force"])).code).toBe(0);
+    const again = await runCli(root, ["init", "--force"]);
+    expect(again.code).toBe(0);
+    expect(again.stdout).toContain('package.json already has "verify": "vfk"\n');
+  });
+
+  it("leaves existing verify scripts alone and says so", async () => {
+    const root = tempDir();
+    writeFiles(root, {
+      "package.json": `${JSON.stringify({ scripts: { lint: "eslint .", verify: "npm run lint" } }, null, 2)}\n`,
+    });
+    const result = await runCli(root, ["init"]);
+    expect(result.code).toBe(0);
+    expect(result.stdout).toContain('Added package.json scripts: "verify:ci": "vfk --all"\n');
+    expect(result.stdout).toContain(
+      'Kept the existing "verify" script (npm run lint); to use Verifika, change it to "vfk" once the checks cover everything it runs\n',
+    );
+    const manifest = JSON.parse(readFileSync(path.join(root, "package.json"), "utf8"));
+    expect(manifest.scripts.verify).toBe("npm run lint");
   });
 
   it("prints help and version", async () => {

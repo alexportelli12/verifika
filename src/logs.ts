@@ -2,7 +2,9 @@ import { createReadStream } from "node:fs";
 import { createInterface } from "node:readline";
 import { open } from "node:fs/promises";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 import { VerifikaError } from "./errors.ts";
+import { withPager, type Write } from "./pager.ts";
 import { duration, isFailureStatus, selectionLabel, type Output } from "./reporters/reporter.ts";
 import { plain, symbol } from "./reporters/human.ts";
 import { stripAnsi } from "./preview.ts";
@@ -17,6 +19,11 @@ export interface LogsRequest {
   tail?: number;
   /** Remove terminal colour codes some tools emit even when piped (default when not on a TTY). */
   stripAnsi?: boolean;
+  /** Page log contents through this command (only on a terminal, never with `tail`). */
+  pager?: string;
+  env?: NodeJS.ProcessEnv;
+  /** For a person at a terminal: local and relative start time, optionally clickable log paths. */
+  display?: { now: Date; hyperlinks: boolean };
 }
 
 /**
@@ -27,7 +34,7 @@ export interface LogsRequest {
 export async function showLogs(request: LogsRequest, output: Output): Promise<number> {
   const run = await readRun(request.root, request.runId);
   if (request.checks.length === 0 && !request.failed) {
-    output.out(renderRunSummary(run));
+    output.out(renderRunSummary(run, request.display));
     return 0;
   }
 
@@ -51,20 +58,28 @@ export async function showLogs(request: LogsRequest, output: Output): Promise<nu
   }
 
   const headers = request.failed || targets.length > 1;
-  for (const check of targets) {
-    if (headers) output.out(`── ${check.name}: ${check.status} (${check.reason}) ──\n`);
-    if (!check.log) {
-      output.out(`${check.name} has no log: ${check.status} (${check.reason})\n`);
-      continue;
+  const print = async (write: Write) => {
+    for (const check of targets) {
+      if (headers) await write(`── ${check.name}: ${check.status} (${check.reason}) ──\n`);
+      if (!check.log) {
+        await write(`${check.name} has no log: ${check.status} (${check.reason})\n`);
+        continue;
+      }
+      await printLog(path.join(request.root, check.log), request, write);
     }
-    await printLog(path.join(request.root, check.log), request, output);
+  };
+  if (request.pager !== undefined && request.tail === undefined) {
+    await withPager(request.pager, request.env ?? process.env, print);
+  } else {
+    await print((text) => output.out(text));
   }
   return 0;
 }
 
-export function renderRunSummary(run: RunResult): string {
+export function renderRunSummary(run: RunResult, display?: LogsRequest["display"]): string {
+  const started = display ? describeTime(new Date(run.startedAt), display.now) : run.startedAt;
   const lines = [
-    `Run ${run.runId} · ${run.status} · ${duration(run.durationMs)} · ${run.startedAt}`,
+    `Run ${run.runId} · ${run.status} · ${duration(run.durationMs)} · ${started}`,
     selectionLabel(run.selection, run.summary.skipped),
   ];
   if (run.status === "running")
@@ -75,7 +90,11 @@ export function renderRunSummary(run: RunResult): string {
     const parts = [`  ${symbol(check.status, plain)} ${check.name.padEnd(width)}`];
     parts.push(duration(check.durationMs).padStart(6));
     if (check.status !== "passed") parts.push(check.reason);
-    if (check.log) parts.push(check.log);
+    if (check.log) {
+      parts.push(
+        display?.hyperlinks ? hyperlink(check.log, path.join(run.root, check.log)) : check.log,
+      );
+    }
     lines.push(parts.join("  "));
   }
   // One line for everything not selected; large configs would otherwise list dozens.
@@ -89,16 +108,47 @@ export function renderRunSummary(run: RunResult): string {
   return `${lines.join("\n")}\n`;
 }
 
+/**
+ * `today 01:12, 3m ago`; `yesterday 23:40, 2h ago`; otherwise the local date.
+ * Local time, because that is what the user's clock shows.
+ */
+export function describeTime(time: Date, now: Date): string {
+  const pad = (value: number) => String(value).padStart(2, "0");
+  const clock = `${pad(time.getHours())}:${pad(time.getMinutes())}`;
+  const day = (date: Date) =>
+    new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+  const days = Math.round((day(now) - day(time)) / 86_400_000);
+  const date =
+    days === 0
+      ? "today"
+      : days === 1
+        ? "yesterday"
+        : `${time.getFullYear()}-${pad(time.getMonth() + 1)}-${pad(time.getDate())}`;
+  return `${date} ${clock}, ${ago(now.getTime() - time.getTime())}`;
+}
+
+function ago(ms: number): string {
+  if (ms < 60_000) return ms < 1_000 ? "just now" : `${Math.floor(ms / 1000)}s ago`;
+  if (ms < 3_600_000) return `${Math.floor(ms / 60_000)}m ago`;
+  if (ms < 86_400_000) return `${Math.floor(ms / 3_600_000)}h ago`;
+  return `${Math.floor(ms / 86_400_000)}d ago`;
+}
+
+/** An OSC 8 terminal hyperlink to a local file; terminals without support show just the text. */
+export function hyperlink(text: string, file: string): string {
+  return `\u001b]8;;${pathToFileURL(file).href}\u001b\\${text}\u001b]8;;\u001b\\`;
+}
+
 async function printLog(
   file: string,
   { tail, stripAnsi: strip = false }: LogsRequest,
-  output: Output,
+  write: Write,
 ): Promise<void> {
   try {
     if (tail !== undefined) {
       const text = await readTail(file, tail);
       const shown = strip ? stripAnsi(text) : text;
-      output.out(shown.endsWith("\n") || shown === "" ? shown : `${shown}\n`);
+      await write(shown.endsWith("\n") || shown === "" ? shown : `${shown}\n`);
       return;
     }
     if (strip) {
@@ -107,15 +157,15 @@ async function printLog(
         input: createReadStream(file, { encoding: "utf8" }),
         crlfDelay: Infinity,
       });
-      for await (const line of lines) output.out(`${stripAnsi(line)}\n`);
+      for await (const line of lines) await write(`${stripAnsi(line)}\n`);
       return;
     }
     let last = "";
     for await (const chunk of createReadStream(file, { encoding: "utf8" })) {
-      output.out(chunk as string);
+      await write(chunk as string);
       last = chunk as string;
     }
-    if (last !== "" && !last.endsWith("\n")) output.out("\n");
+    if (last !== "" && !last.endsWith("\n")) await write("\n");
   } catch (error) {
     throw new VerifikaError(`cannot read log ${file}: ${(error as Error).message}`);
   }

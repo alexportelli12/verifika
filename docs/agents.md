@@ -50,8 +50,8 @@ For agents without skill support, put the essentials in your project's `AGENTS.m
 ```markdown
 ## Verification
 
-- Run `npx vfk` after changes; it runs only the affected checks.
-- Before saying a task is done, committing or opening a PR, run `npx vfk --all` and require `PASS` with exit code 0.
+- Run `npx vfk` (or `npm run verify`) after changes; it runs only the affected checks.
+- Before saying a task is done, committing or opening a PR, run the full gate, `npx vfk --all` (or `npm run verify:ci`), and require `PASS` with exit code 0. `npm run verify` is selective and is not the gate.
 - On failure, read the printed preview, then `npx vfk logs <check>` (or `--failed`). Do not read logs of passing checks.
 - A selective PASS does not cover skipped checks. Exit 2 means a usage/config error, not a passing run.
 ```
@@ -63,7 +63,7 @@ $ npx vfk                        # after editing src/cart.ts
 FAIL 1/2 (2.8s) selective: 1 file changed since HEAD (a1b2c3d); 3 skipped
 typecheck: exit 2
   src/cart.ts(14,7): error TS2322: Type 'string' is not assignable to type 'number'.
-Run: verifika logs typecheck
+Run: vfk logs typecheck
 
 $ npx vfk --check typecheck      # after the fix
 PASS 1/1 (2.1s) explicit: --check typecheck; 4 skipped
@@ -74,6 +74,6 @@ PASS 5/5 (14s) full run (--all)
 
 ## Wiring into existing workflows
 
-- **`npm run verify`.** Many agent workflows treat `npm run verify` as the authoritative gate. Point it at the full suite: `"verify": "verifika --all"`.
-- **CI.** `npx vfk` runs everything in CI automatically; `npx vfk --all` makes that explicit. Use `--mode json` if a later step needs structured results, and upload `.verifika/runs/` as an artifact if you want logs (they may contain secrets).
+- **npm scripts.** `vfk init` adds `"verify": "vfk"` (selective) and `"verify:ci": "vfk --all"` (the full gate). Because `npm run verify` is selective, it is not the pre-delivery gate: agents and workflows that need the authoritative gate before delivery must run `npm run verify:ci` (or `npx vfk --all`). If your workflow is hard-wired to `npm run verify` as its gate, point that workflow at `npm run verify:ci` rather than turning `verify` back into a full run.
+- **CI.** Run `npm run verify:ci` (or `npx vfk --all`). Plain `npx vfk` also runs everything in CI, but the explicit gate does not depend on CI detection. Use `--mode json` if a later step needs structured results, and upload `.verifika/runs/` as an artifact if you want logs (they may contain secrets).
 - **Hooks.** For a pre-push hook, use `npx vfk --changed-since origin/main` for speed, but keep `--all` in CI.

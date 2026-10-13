@@ -12,6 +12,8 @@ export interface ExecOptions {
   previewLines: number;
   /** Aborting terminates the process tree; `signal.reason` is reported back. */
   signal: AbortSignal;
+  /** Receives decoded output as it arrives, per stream, for live progress. */
+  onOutput?: (stream: "stdout" | "stderr", text: string) => void;
 }
 
 export type ExecOutcome = (
@@ -97,11 +99,18 @@ export async function execCheck(options: ExecOptions): Promise<ExecOutcome> {
   }
   active.add(child);
 
-  for (const stream of [child.stdout, child.stderr]) {
+  for (const [name, stream] of [
+    ["stdout", child.stdout],
+    ["stderr", child.stderr],
+  ] as const) {
     if (!stream) continue;
     const decoder = new StringDecoder("utf8");
     stream.pipe(log, { end: false });
-    stream.on("data", (chunk: Buffer) => capture.write(stream, decoder.write(chunk)));
+    stream.on("data", (chunk: Buffer) => {
+      const text = decoder.write(chunk);
+      capture.write(stream, text);
+      options.onOutput?.(name, text);
+    });
     stream.on("end", () => capture.write(stream, decoder.end() + "\n"));
   }
 
