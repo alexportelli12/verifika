@@ -470,6 +470,16 @@ h3 {
 
 /* Get started */
 
+.agent-prompt {
+  margin-top: 32px;
+}
+
+.agent-prompt pre {
+  max-height: 360px;
+  overflow: auto;
+  white-space: pre;
+}
+
 .start {
   display: grid;
   grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
@@ -528,7 +538,13 @@ h3 {
 
 .site-footer__links {
   display: flex;
-  gap: 20px;
+  gap: 8px 20px;
+}
+
+.site-footer__links a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
 }
 
 /* Responsive */

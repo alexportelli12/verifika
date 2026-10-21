@@ -1,3 +1,17 @@
+---
+sources:
+  - src/main.ts
+  - src/config.ts
+  - src/planner.ts
+  - src/runner.ts
+  - src/scheduler.ts
+  - src/process.ts
+  - src/runs.ts
+  - src/logs.ts
+  - src/reporters/**
+reviewed: 2026-10-21
+---
+
 # Architecture
 
 Verifika is a pipeline of small modules with one direction of data flow. Execution and presentation are separate: the runner emits events and a final `RunResult`; reporters only format them.
@@ -35,7 +49,7 @@ cli.ts ─ main.ts ── config.ts ──► VerifikaConfig
 
 **Shell commands, trusted config.** Commands are strings run by the platform shell, like package scripts. This keeps configs portable (`npm run lint` works everywhere, including `.cmd` shims on Windows) and familiar. The config file is trusted; nothing derived from the repository state (file names, refs) is ever placed in a command. Git is invoked with argument arrays, never a shell, and refs starting with `-` are rejected.
 
-**Confirmed cleanup.** On POSIX each check runs in its own process group (`detached`), so a timeout, fail-fast or Ctrl-C can signal the whole tree at once: SIGTERM, a two-second grace period, then SIGKILL. After a check exits, the rest of its group is terminated the same way and Verifika polls until the group is gone, which also stops a background process from holding the output pipe open. On Windows the tree is killed with `taskkill /T /F` while its root is alive; once the root has exited, descendants are found by parent process id and creation time and killed. If cleanup cannot be confirmed, the check is an `error`, never a pass. A process that survives SIGKILL is abandoned after a bounded wait so the run cannot hang.
+**Confirmed cleanup.** On POSIX each check runs in its own process group (`detached`), so a timeout, fail-fast or Ctrl-C can signal the whole tree at once: SIGTERM, a two-second grace period, then SIGKILL. After a check exits, the rest of its group is terminated the same way. Verifika polls until the group is gone, which also stops a background process from holding the output pipe open. On Windows the tree is killed with `taskkill /T /F` while its root is alive. Once the root has exited, descendants are found by parent process id and creation time and killed. If cleanup cannot be confirmed, the check is an `error`, never a pass. A process that survives SIGKILL is abandoned after a bounded wait so the run cannot hang.
 
 **Bounded memory.** Check output is piped straight into the log file with backpressure. The only in-memory output is the preview: at most `--preview` lines of at most 200 characters, plus one partial line capped at 4 KB per stream. A check can print gigabytes without affecting Verifika.
 
@@ -56,7 +70,7 @@ cli.ts ─ main.ts ── config.ts ──► VerifikaConfig
 ## Testing
 
 - `test/unit`: config validation (including agreement with the JSON schema via Ajv), planner decisions, glob semantics, scheduler ordering and limits with controllable fake tasks, preview extraction, reporters, CI detection.
-- `test/integration`: real temporary git repositories (staged, unstaged, untracked, renames, deletions, detached HEAD, merge-base, shallow clones, subdirectory configs, hostile file names) and the CLI end to end: exit codes, every output mode, logs, timeouts, fail-fast, concurrency, dependency ordering, signals and process-tree cleanup.
+- `test/integration`: real temporary git repositories (staged, unstaged, untracked, renames, deletions, detached HEAD, merge-base, shallow clones, subdirectory configs, hostile file names). They also run the CLI end to end: exit codes, every output mode, logs, timeouts, fail-fast, concurrency, dependency ordering, signals and process-tree cleanup.
 - `scripts/check-skill.mjs`: validates the skill's frontmatter and runs every command it documents.
 - `scripts/pack-smoke.mjs`: packs the package, installs the tarball in an isolated project and runs the installed binary.
 

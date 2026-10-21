@@ -51,6 +51,11 @@
     "test": "vitest run",
     "test:pack": "node scripts/pack-smoke.mjs",
     "check:skill": "node scripts/check-skill.mjs",
+    "docs:build": "node scripts/docs/build.mjs",
+    "check:docs": "node scripts/docs/check.mjs",
+    "check:docs-fresh": "node scripts/docs/fresh.mjs",
+    "test:docs": "node --test scripts/docs/docs.test.mjs scripts/docs/fresh.test.mjs scripts/docs/vale.test.mjs",
+    "prose": "node scripts/docs/vale.mjs --config .vale.ini README.md docs site/index.html",
     "verify": "node src/cli.ts",
     "verify:ci": "node src/cli.ts --all",
     "prepack": "npm run build"
@@ -63,10 +68,13 @@
     "@types/node": "^22.20.5",
     "@types/picomatch": "^4.0.3",
     "ajv": "^8.20.0",
+    "dictionary-en-gb": "3.0.0",
     "eslint": "^10.12.0",
+    "minisearch": "7.2.0",
     "prettier": "^3.9.10",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.71.2",
+    "vitepress": "1.6.4",
     "vitest": "^5.0.4"
   }
 }

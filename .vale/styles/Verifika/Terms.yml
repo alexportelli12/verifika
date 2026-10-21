@@ -1,0 +1,10 @@
+extends: substitution
+message: "Use '%s' instead of '%s' (see the glossary)."
+level: error
+ignorecase: true
+swap:
+  pull-request: pull request
+  selective mode: selective run
+  full mode: full run
+  config directory: project root
+  run ID: run id

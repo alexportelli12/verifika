@@ -1,0 +1,24 @@
+/* Verifika's accent on the landing page's dark palette. */
+:root {
+  --vp-c-brand-1: #7ee2a8;
+  --vp-c-brand-2: #5fcf90;
+  --vp-c-brand-3: #45b87a;
+  --vp-c-brand-soft: rgb(126 226 168 / 0.14);
+}
+
+.dark {
+  --vp-c-bg: #0a0b0d;
+  --vp-c-bg-alt: #0e1013;
+  --vp-c-bg-soft: #0e1013;
+  --vp-c-bg-elv: #13161a;
+  --vp-c-divider: #1d2127;
+  --vp-c-gutter: #1d2127;
+  --vp-button-brand-text: #0a0b0d;
+}
+
+/* VitePress's heading anchors are a few pixels wide; give them a usable target. */
+.vp-doc .header-anchor {
+  min-width: 24px;
+  margin-left: -24px;
+  text-align: center;
+}

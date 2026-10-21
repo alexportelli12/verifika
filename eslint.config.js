@@ -2,7 +2,7 @@ import js from "@eslint/js";
 import tseslint from "typescript-eslint";
 
 export default tseslint.config(
-  { ignores: ["dist/", "coverage/", "node_modules/"] },
+  { ignores: ["dist/", "coverage/", "node_modules/", "docs-site/", "site/docs/"] },
   js.configs.recommended,
   ...tseslint.configs.strict,
   {
@@ -16,6 +16,8 @@ export default tseslint.config(
         setInterval: "readonly",
         clearInterval: "readonly",
         Buffer: "readonly",
+        fetch: "readonly",
+        Response: "readonly",
       },
     },
     rules: {

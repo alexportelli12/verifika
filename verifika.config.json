@@ -37,6 +37,61 @@
       "command": "npm run test:pack",
       "paths": ["src/**", "schemas/**", "skills/**", "scripts/pack-smoke.mjs", "README.md"],
       "dependsOn": ["build"]
+    },
+    "docs": {
+      "command": "npm run check:docs",
+      "paths": [
+        "README.md",
+        "CHANGELOG.md",
+        "docs/**",
+        "examples/**",
+        "schemas/**",
+        "skills/verifika/**",
+        "site/**",
+        "src/main.ts",
+        "src/errors.ts",
+        "scripts/docs/**",
+        "package.json"
+      ]
+    },
+    "docs-tests": {
+      "command": "npm run test:docs",
+      "paths": [
+        "README.md",
+        "CHANGELOG.md",
+        "docs/**",
+        "examples/**",
+        "schemas/**",
+        "skills/verifika/**",
+        "site/index.html",
+        "src/main.ts",
+        "src/errors.ts",
+        "scripts/docs/**"
+      ]
+    },
+    "docs-fresh": {
+      "command": "npm run check:docs-fresh",
+      "paths": [
+        "README.md",
+        "docs/**",
+        "site/index.html",
+        "src/**",
+        "schemas/**",
+        "skills/verifika/**",
+        "scripts/check-skill.mjs",
+        "scripts/docs/**"
+      ]
+    },
+    "prose": {
+      "command": "npm run --silent prose",
+      "paths": [
+        "README.md",
+        "docs/**",
+        "site/index.html",
+        ".vale.ini",
+        ".vale/**",
+        "scripts/docs/vale.mjs"
+      ]
     }
   }
 }

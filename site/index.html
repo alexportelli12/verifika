@@ -46,7 +46,7 @@
           <span class="brand__name">verifika</span>
         </a>
         <nav class="site-nav" aria-label="Project links">
-          <a href="https://github.com/alexportelli12/verifika#readme">Docs</a>
+          <a href="docs/">Docs</a>
           <a href="https://www.npmjs.com/package/verifika">npm</a>
           <a href="https://github.com/alexportelli12/verifika">GitHub</a>
         </nav>
@@ -66,7 +66,12 @@
           <div class="command">
             <span class="command__prompt" aria-hidden="true">$</span>
             <code class="command__text">npm install --save-dev verifika</code>
-            <button class="copy" type="button" data-copy="npm install --save-dev verifika">
+            <button
+              class="copy"
+              type="button"
+              aria-label="Copy install command"
+              data-copy="npm install --save-dev verifika"
+            >
               <span class="copy__label">Copy</span>
             </button>
           </div>
@@ -238,13 +243,68 @@ npx vfk --all    <span class="t-c"># run every check, before you push and in CI<
               local runs can skip what a change can't affect.
             </p>
             <p>
-              Using a coding agent? The README has a setup prompt that installs Verifika, writes the
+              Using a coding agent? Paste the setup prompt below. It installs Verifika, writes the
               config for your repository, and adds the agent skill.
             </p>
-            <a class="text-link" href="https://github.com/alexportelli12/verifika#readme">
+            <a class="text-link" href="docs/">
               Read the documentation <span aria-hidden="true">→</span>
             </a>
           </div>
+        </div>
+        <div class="code-block agent-prompt">
+          <div class="code-block__bar">
+            <span>Setup prompt for a coding agent</span>
+            <button
+              class="copy"
+              type="button"
+              aria-label="Copy setup prompt"
+              data-copy='Set up Verifika (https://github.com/alexportelli12/verifika) in this repository.&#10;&#10;1. Check that Node.js is 22.13 or newer, and install the project&apos;s dependencies if&#10;   they are missing. Install Verifika as a dev dependency with this repository&apos;s&#10;   package manager (npm install --save-dev verifika, or the pnpm/yarn equivalent).&#10;   It provides the `vfk` command.&#10;2. Run `npx vfk init` to create verifika.config.json, then refine it by reading&#10;   package.json, the CI workflows and the tool configs:&#10;   - One check per quality gate the project actually has (such as format, lint,&#10;     typecheck, unit tests, build). Do not invent checks for tools it does not use,&#10;     or add a check that another one already fully covers. Every command must be&#10;     non-interactive and exit on its own: no watch mode, no prompts, no dev servers.&#10;   - Give each check `paths` globs for the files that can affect it, so local runs&#10;     select only what a change needs. If unsure, leave `paths` out: the check then&#10;     runs on every change.&#10;   - Add `dependsOn` where one check needs another&apos;s output (for example e2e after build).&#10;   - Keep concurrency at 1 unless the checks clearly share no build outputs.&#10;   - Make sure package.json has two scripts: "verify": "vfk" (selective, for local&#10;     work) and "verify:ci": "vfk --all" (the full gate). `vfk init` adds them when&#10;     they are missing. If a "verify" or "verify:ci" script already exists, replace&#10;     it only when the configured checks cover everything it ran; otherwise leave it&#10;     and report the conflict. This is the one exception to the rule below about&#10;     existing scripts.&#10;   - If the CI workflow runs the gate some other way, report that switching it to&#10;     `npm run verify:ci` is recommended. Do not edit the workflow.&#10;   Reference: https://github.com/alexportelli12/verifika/blob/main/docs/configuration.md&#10;3. Validate the config:&#10;   - Run `npx vfk --all`. If a check fails, decide whether the config is wrong (fix it)&#10;     or the project already fails that check (report it; do not fix it).&#10;   - Run `npx vfk plan`. Until this setup is committed, the changed package.json and&#10;     lockfile select every check; that is expected. Explain which checks a typical&#10;     source edit and a documentation-only edit would select once it is committed.&#10;4. Install the agent skill: copy node_modules/verifika/skills/verifika into this&#10;   agent&apos;s skills directory (see&#10;   https://github.com/alexportelli12/verifika/blob/main/docs/agents.md).&#10;&#10;Do not change source code or existing scripts to make checks pass (except "verify"&#10;and "verify:ci", as step 2 describes), and do not commit.&#10;Finish with: the checks you configured and why, the --all result, the expected&#10;selection for those two edits, the scripts you added, replaced or left (with any&#10;conflicts), any CI recommendation, and any existing failures you found.'
+            >
+              <span class="copy__label">Copy</span>
+            </button>
+          </div>
+          <pre data-prompt tabindex="0" role="region" aria-label="Setup prompt for a coding agent">
+Set up Verifika (https://github.com/alexportelli12/verifika) in this repository.
+
+1. Check that Node.js is 22.13 or newer, and install the project's dependencies if
+   they are missing. Install Verifika as a dev dependency with this repository's
+   package manager (npm install --save-dev verifika, or the pnpm/yarn equivalent).
+   It provides the `vfk` command.
+2. Run `npx vfk init` to create verifika.config.json, then refine it by reading
+   package.json, the CI workflows and the tool configs:
+   - One check per quality gate the project actually has (such as format, lint,
+     typecheck, unit tests, build). Do not invent checks for tools it does not use,
+     or add a check that another one already fully covers. Every command must be
+     non-interactive and exit on its own: no watch mode, no prompts, no dev servers.
+   - Give each check `paths` globs for the files that can affect it, so local runs
+     select only what a change needs. If unsure, leave `paths` out: the check then
+     runs on every change.
+   - Add `dependsOn` where one check needs another's output (for example e2e after build).
+   - Keep concurrency at 1 unless the checks clearly share no build outputs.
+   - Make sure package.json has two scripts: "verify": "vfk" (selective, for local
+     work) and "verify:ci": "vfk --all" (the full gate). `vfk init` adds them when
+     they are missing. If a "verify" or "verify:ci" script already exists, replace
+     it only when the configured checks cover everything it ran; otherwise leave it
+     and report the conflict. This is the one exception to the rule below about
+     existing scripts.
+   - If the CI workflow runs the gate some other way, report that switching it to
+     `npm run verify:ci` is recommended. Do not edit the workflow.
+   Reference: https://github.com/alexportelli12/verifika/blob/main/docs/configuration.md
+3. Validate the config:
+   - Run `npx vfk --all`. If a check fails, decide whether the config is wrong (fix it)
+     or the project already fails that check (report it; do not fix it).
+   - Run `npx vfk plan`. Until this setup is committed, the changed package.json and
+     lockfile select every check; that is expected. Explain which checks a typical
+     source edit and a documentation-only edit would select once it is committed.
+4. Install the agent skill: copy node_modules/verifika/skills/verifika into this
+   agent's skills directory (see
+   https://github.com/alexportelli12/verifika/blob/main/docs/agents.md).
+
+Do not change source code or existing scripts to make checks pass (except "verify"
+and "verify:ci", as step 2 describes), and do not commit.
+Finish with: the checks you configured and why, the --all result, the expected
+selection for those two edits, the scripts you added, replaced or left (with any
+conflicts), any CI recommendation, and any existing failures you found.</pre>
         </div>
       </section>
     </main>

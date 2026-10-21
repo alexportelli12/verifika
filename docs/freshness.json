@@ -1,0 +1,15 @@
+{
+  "README.md": {
+    "sources": [
+      "src/main.ts",
+      "src/init.ts",
+      "schemas/verifika.schema.json",
+      "skills/verifika/SKILL.md"
+    ],
+    "reviewed": "2026-10-21"
+  },
+  "site/index.html": {
+    "sources": ["src/main.ts", "src/reporters/**", "README.md", "skills/verifika/SKILL.md"],
+    "reviewed": "2026-10-21"
+  }
+}
