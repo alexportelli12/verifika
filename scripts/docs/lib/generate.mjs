@@ -1,6 +1,7 @@
 // Turns the allowlisted files into Markdown pages. Nothing here copies facts
 // by hand: configuration options come from the JSON schema, flags and exit
-// codes from the CLI's own help, examples and the skill from their files.
+// codes from the CLI's own help (checked against the options it parses),
+// examples and the skill from their files.
 import { execFileSync } from "node:child_process";
 import path from "node:path";
 import { parseFrontmatter } from "./frontmatter.mjs";
@@ -203,23 +204,27 @@ function readCli(root) {
       encoding: "utf8",
     });
   const help = run(["--help"]).trimEnd();
-  const codes = JSON.parse(
+  const { codes, options } = JSON.parse(
     execFileSync(
       process.execPath,
       [
         "--input-type=module",
         "-e",
-        `import { ExitCode } from "./src/errors.ts"; console.log(JSON.stringify(ExitCode));`,
+        `import { ExitCode } from "./src/errors.ts";
+         import { OPTIONS } from "./src/main.ts";
+         console.log(JSON.stringify({ codes: ExitCode, options: OPTIONS }));`,
       ],
       { cwd: root, encoding: "utf8" },
     ),
   );
-  return { help, codes };
+  return { help, codes, options };
 }
 
 // The help is a fixed layout: "Heading (applies to):" then rows indented by
 // two spaces ("-c, --check <name>") or six ("--all"), with wrapped descriptions
-// indented under the description column.
+// indented under the description column. The exit codes paragraph ends the
+// sections. Any other line inside a section is an error, so a row this parser
+// cannot read fails the build instead of vanishing from the page.
 export function parseHelp(help) {
   const sections = [];
   let current = null;
@@ -232,6 +237,7 @@ export function parseHelp(help) {
       last = null;
       continue;
     }
+    if (/^Exit codes: /.test(line)) current = null;
     if (!current) continue;
     const flag = line.match(/^ {2}(?:(-\w),\s+| {4})(--[\w-]+)(?: (<[^>]+>))?\s{2,}(\S.*)$/);
     const command = line.match(/^ {2}(vfk\b.*?)\s{2,}(\S.*)$/);
@@ -243,8 +249,10 @@ export function parseHelp(help) {
       current.rows.push(last);
     } else if (last && /^ {20,}\S/.test(line)) {
       last.description += ` ${line.trim()}`;
-    } else {
+    } else if (line.trim() === "") {
       last = null;
+    } else {
+      throw new DocsError(`\`vfk --help\`: cannot read this line under "${current.name}": ${line}`);
     }
   }
   return sections;
@@ -270,11 +278,41 @@ function exitCodeRows(help, codes) {
   return rows.sort((a, b) => parseInt(a.code, 10) - parseInt(b.code, 10));
 }
 
+// Every option the CLI parses must be a flag row, so a flag added to the
+// parser but not to the help fails the build. `init --force` is the one
+// exception: the help documents it in the init command's usage row.
+function checkOptionsDocumented(options, sections, commands) {
+  const flags = new Map(
+    sections.flatMap((section) =>
+      section.rows.filter((row) => row.flag).map((row) => [row.flag, row.short]),
+    ),
+  );
+  for (const [command, parsed] of Object.entries(options)) {
+    for (const [name, option] of Object.entries(parsed)) {
+      const flag = `--${name}`;
+      if (command === "init" && name === "force") {
+        if (commands.rows.some((row) => row.command === "vfk init [--force]")) continue;
+        throw new DocsError("`vfk --help` does not document `vfk init [--force]`");
+      }
+      if (!flags.has(flag))
+        throw new DocsError(
+          `\`vfk ${command}\` parses ${flag}, but \`vfk --help\` has no row for it`,
+        );
+      const short = option.short ? `-${option.short}` : "";
+      if (flags.get(flag) !== short)
+        throw new DocsError(
+          `\`vfk ${command}\` parses ${flag} with short flag "${short}", but \`vfk --help\` shows "${flags.get(flag)}"`,
+        );
+    }
+  }
+}
+
 function cliPage(root) {
-  const { help, codes } = readCli(root);
+  const { help, codes, options } = readCli(root);
   const sections = parseHelp(help);
   const commands = sections.find((section) => section.rows.some((row) => row.command));
   if (!commands) throw new DocsError("could not read the commands from `vfk --help`");
+  checkOptionsDocumented(options, sections, commands);
   const lines = [
     "# Command-line options",
     "",

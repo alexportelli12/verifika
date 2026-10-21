@@ -92,7 +92,7 @@ const SELECTION = {
   "changed-since": { type: "string" },
 } as const satisfies ParseArgsConfig["options"];
 
-const OPTIONS = {
+export const OPTIONS = {
   run: {
     ...SHARED,
     ...SELECTION,

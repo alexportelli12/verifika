@@ -161,6 +161,60 @@ test("a flag added to the CLI's help appears on the generated CLI page", async (
   assert.match(page, /\| `128\+signal` \| Interrupted/);
 });
 
+test("every option the CLI parses has a row on the generated CLI page", async () => {
+  const { OPTIONS } = await import("../../src/main.ts");
+  const directory = await copyRepo();
+  const { out, site } = outputs(directory);
+  await buildDocs({ root: directory, out, site, render: false });
+  const page = await readFile(path.join(out, "reference/cli.md"), "utf8");
+  for (const [command, options] of Object.entries(OPTIONS)) {
+    for (const [name, option] of Object.entries(options)) {
+      // `init --force` is documented in the init command's usage row, not a flag table.
+      if (command === "init" && name === "force") {
+        assert.match(page, /^\| `vfk init \[--force\]` \|/m, "init --force is documented");
+        continue;
+      }
+      const flags = option.short ? `-${option.short}, --${name}` : `--${name}`;
+      assert.match(
+        page,
+        new RegExp(`^\\| \`${flags}\` \\|`, "m"),
+        `${command} --${name} has a row on the CLI page`,
+      );
+    }
+  }
+});
+
+test("the build fails when the CLI parses a flag its help does not document", async () => {
+  const directory = await copyRepo({
+    edit: {
+      "src/main.ts": (text) =>
+        text.replace(
+          'init: { ...SHARED, force: { type: "boolean" } },',
+          'init: { ...SHARED, force: { type: "boolean" }, quokka: { type: "boolean" } },',
+        ),
+    },
+  });
+  const { out, site } = outputs(directory);
+  await assert.rejects(buildDocs({ root: directory, out, site, render: false }), /--quokka/);
+});
+
+test("the build fails on a help line it cannot read instead of dropping it", async () => {
+  const directory = await copyRepo({
+    edit: {
+      "src/main.ts": (text) =>
+        text.replace(
+          "      --config <path>             Use this config file instead of searching upward\n",
+          "      --config <path>             Use this config file instead of searching upward\n      --quokka<n> Quokka marker flag\n",
+        ),
+    },
+  });
+  const { out, site } = outputs(directory);
+  await assert.rejects(
+    buildDocs({ root: directory, out, site, render: false }),
+    /--quokka<n> Quokka marker flag/,
+  );
+});
+
 test("the build publishes only allowlisted tracked files, and search finds every page by its rarest word", async () => {
   const directory = await copyRepo({
     extra: { "scripts/not-allowlisted.md": "TRACKED-BUT-NOT-ALLOWLISTED" },
