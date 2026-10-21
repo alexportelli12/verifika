@@ -10,10 +10,12 @@ Requires Node.js 22.18+ (for running TypeScript sources directly) and git.
 git clone https://github.com/alexportelli12/verifika
 cd verifika
 npm ci
-npm run verify:ci       # the full quality gate, run by Verifika itself
+npm run verify          # the full quality gate, run by Verifika itself
 ```
 
-`npm run verify:ci` runs `node src/cli.ts --all`, so Verifika verifies itself with the checks in [`verifika.config.json`](verifika.config.json): formatting, lint, typecheck, build, tests, skill validation, a packaged-install smoke test, and the documentation checks described under [Documentation](#documentation). During development, `npm run verify` (`node src/cli.ts`) runs only the checks your changes affect, and `node src/cli.ts logs --failed` shows failures. Run `npm run verify:ci` before opening a pull request.
+`npm run verify` runs `node src/cli.ts --all`, so Verifika verifies itself with the checks in [`verifika.config.json`](verifika.config.json): formatting, lint, typecheck, build, tests, skill validation, a packaged-install smoke test, and the documentation checks described under [Documentation](#documentation). During development, `npm run vfk` (`node src/cli.ts`) runs only the checks your changes affect, and `node src/cli.ts logs --failed` shows failures. Run `npm run verify` before opening a pull request; CI runs the same script.
+
+This repository's own scripts differ from the split it recommends to users (`verify` selective, `verify:ci` the full gate): here `verify` is the full gate, so agent workflows that gate on `npm run verify`, such as [mexxi](https://github.com/alexportelli12/mexxi), get a full run and can reuse CI's result.
 
 | Script                | Purpose                                           |
 | --------------------- | ------------------------------------------------- |
@@ -84,7 +86,7 @@ Pushing a `v<version>` tag runs the [release workflow](.github/workflows/release
 npm can only attach a trusted publisher to a package that already exists, so the first version is published by hand:
 
 1. Enable two-factor authentication on the npm account (npmjs.com → Account → Two-Factor Authentication).
-2. From a clean checkout of `main` at the release commit: `npm ci && npm run verify:ci && npm publish --access public`.
+2. From a clean checkout of `main` at the release commit: `npm ci && npm run verify && npm publish --access public`.
 3. On npmjs.com → `verifika` → Settings → Trusted publishing, add a GitHub Actions publisher: user `alexportelli12`, repository `verifika`, workflow `release.yml`, environment `release`. Allow staged publishing only; leave "Allow publish" unchecked. Then, under Publishing access, choose "Require two-factor authentication and disallow tokens".
 4. On GitHub → Settings → Environments → `release` (created by the first workflow run, or add it by hand), add yourself as a required reviewer and limit deployments to tags matching `v*.*.*`.
 5. Push the `v<version>` tag. The workflow sees the version is already on npm, skips publishing and creates the GitHub release.
