@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { cp, mkdir, mkdtemp, readFile, readdir, symlink, writeFile } from "node:fs/promises";
+import { cp, mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import test from "node:test";
+import test, { after } from "node:test";
 import { fileURLToPath } from "node:url";
 import MiniSearch from "minisearch";
 import { buildDocs } from "./build.mjs";
@@ -16,12 +16,18 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..")
 const git = (cwd, ...args) =>
   execFileSync("git", args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
 
+const temporary = [];
+after(() =>
+  Promise.all(temporary.map((directory) => rm(directory, { recursive: true, force: true }))),
+);
+
 // A throwaway Git repository holding this working tree's files (tracked, plus
 // untracked ones Git would not ignore), with node_modules linked so VitePress
 // resolves. `edit` changes files before the commit; `extra` adds files;
 // `untracked` writes files after the commit, which must never be read.
 async function copyRepo({ extra = {}, untracked = {}, edit = {} } = {}) {
   const directory = await mkdtemp(path.join(os.tmpdir(), "verifika-docs-"));
+  temporary.push(directory);
   const files = git(root, "ls-files", "-co", "--exclude-standard", "-z")
     .split("\0")
     .filter(Boolean);
@@ -240,4 +246,18 @@ test("the build fails on a planted broken internal link", async () => {
   });
   const { out, site } = outputs(directory);
   await assert.rejects(buildDocs({ root: directory, out, site }), /dead link/i);
+});
+
+test("the build fails on a link to a repository path Git does not track", async () => {
+  const directory = await copyRepo({
+    edit: {
+      "docs/architecture.md": (text) =>
+        `${text}\nSee [a missing source](../src/no-such-file.ts).\n`,
+    },
+  });
+  const { out, site } = outputs(directory);
+  await assert.rejects(
+    buildDocs({ root: directory, out, site, render: false }),
+    /docs\/architecture\.md.*\.\.\/src\/no-such-file\.ts/,
+  );
 });

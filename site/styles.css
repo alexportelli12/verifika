@@ -477,7 +477,7 @@ h3 {
 .agent-prompt pre {
   max-height: 360px;
   overflow: auto;
-  white-space: pre-wrap;
+  white-space: pre;
 }
 
 .start {

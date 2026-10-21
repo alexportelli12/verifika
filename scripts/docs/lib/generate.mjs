@@ -36,7 +36,7 @@ export function pageLink(from, to) {
 }
 
 // Source files link to each other by repository path. Published pages link to
-// pages; anything else tracked links to GitHub; anything untracked is plain text.
+// pages; anything else tracked links to GitHub; anything untracked is an error.
 function rewriteLinks(markdown, { file, route, tracked }) {
   const trackedSet = new Set(tracked);
   let fenced = false;
@@ -69,7 +69,9 @@ function rewriteLinks(markdown, { file, route, tracked }) {
             return `[${text}](${REPO_URL}/blob/main/${resolved}${anchor ? `#${anchor}` : ""})`;
           if (tracked.some((name) => name.startsWith(`${resolved}/`)))
             return `[${text}](${REPO_URL}/tree/main/${resolved})`;
-          return text;
+          throw new DocsError(
+            `${file}: the link "${target}" points to ${resolved}, which no page publishes and Git does not track`,
+          );
         },
       );
     })

@@ -49,6 +49,8 @@ The documentation site at <https://alexportelli12.github.io/verifika/docs/> has 
 | Changelog             | `CHANGELOG.md`                                                           | Add an entry.                                    |
 | Guides                | `docs/*.md`, written by hand                                             | Update the page when a source it lists changes.  |
 
+`npm ci` runs the one install script the repository allows: it downloads the pinned Vale binary from GitHub and verifies its checksum. A GitHub outage or rate limit can therefore fail an install, in CI and in the release workflow as well as locally.
+
 Each guide lists what it describes in `sources:` frontmatter and the date it was last checked in `reviewed:`. The `docs-fresh` check fails when a branch changes a listed source without touching the page. Update the page, or bump `reviewed` when nothing needs to change. `README.md` and `site/index.html` cannot carry frontmatter, so `docs/freshness.json` holds their declarations. The check compares with the merge base of `HEAD` and origin's default branch; it fails rather than skips when it cannot find one, so run `git fetch origin` or set `VERIFIKA_DOCS_BASE`.
 
 The `docs` check builds the whole site and fails on a broken internal link or when the landing page's setup prompt drifts from the README's. The `prose` check runs [Vale](https://vale.sh) with the Verifika style in `.vale/`: British spelling, a glossary, no filler words and sentences under 30 words. The README is the npm front page and ships in the package, so keep it concise and link to the docs for detail.

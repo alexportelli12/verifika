@@ -79,6 +79,8 @@
     "vitest": "^5.0.4"
   },
   "allowScripts": {
-    "@vvago/vale@3.24.0": true
+    "@vvago/vale@3.24.0": true,
+    "esbuild@0.21.5": false,
+    "fsevents@2.3.3": false
   }
 }

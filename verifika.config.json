@@ -57,9 +57,11 @@
       "command": "npm run test:docs",
       "paths": [
         "README.md",
+        "CHANGELOG.md",
         "docs/**",
         "examples/**",
         "schemas/**",
+        "skills/verifika/**",
         "site/index.html",
         "src/main.ts",
         "src/errors.ts",

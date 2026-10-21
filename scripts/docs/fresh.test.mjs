@@ -1,11 +1,16 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { cp, mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import test from "node:test";
+import test, { after } from "node:test";
 import { fileURLToPath } from "node:url";
 import { checkFreshness, FreshnessError } from "./fresh.mjs";
+
+const temporary = [];
+after(() =>
+  Promise.all(temporary.map((directory) => rm(directory, { recursive: true, force: true }))),
+);
 
 const run = (cwd, ...args) =>
   execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@example.com", ...args], {
@@ -26,6 +31,7 @@ const sidecar = (reviewed = "2026-01-01") =>
 // branch checked out in a clone of it.
 async function fixture() {
   const parent = await mkdtemp(path.join(os.tmpdir(), "verifika-fresh-"));
+  temporary.push(parent);
   const origin = path.join(parent, "origin.git");
   const seed = path.join(parent, "seed");
   run(parent, "init", "-q", "--bare", "-b", "main", origin);
@@ -132,6 +138,7 @@ test("with no origin ref it fails loudly instead of skipping, and VERIFIKA_DOCS_
 test("changing a source of docs/cli.md without touching docs/cli.md fails the real check", async () => {
   const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
   const directory = await mkdtemp(path.join(os.tmpdir(), "verifika-fresh-real-"));
+  temporary.push(directory);
   const files = execFileSync("git", ["ls-files", "-co", "--exclude-standard", "-z"], {
     cwd: root,
     encoding: "utf8",
