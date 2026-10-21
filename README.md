@@ -28,7 +28,7 @@ Run: vfk logs typecheck
 ## Why Verifika
 
 - **Small output, especially for agents.** On a real Angular project, one failing test produced 94,900 bytes of output with the project's previous verify script (~23,700 tokens). Verifika reported the same failure in 369 bytes (~90 tokens): the test name, the assertion and the totals. Full logs stay on disk until you ask for them.
-- **Less waiting.** Locally, only affected checks run: in a 25-check monorepo, a typical edit ran 1–13 of them. Checks that share no build outputs can also run in parallel; on that Angular project, four at a time cut the full gate from 95.5 s to 61.7 s. [Measurements](docs/benchmarks.md).
+- **Less waiting.** Locally, only affected checks run: in a 25-check monorepo, a typical edit ran 1–13 of them. Checks that share no build outputs can also run in parallel. On that Angular project, four at a time cut the full gate from 95.5 s to 61.7 s. [Measurements](docs/benchmarks.md).
 - **Deterministic and conservative.** Selection comes from your config, file globs, dependencies and git; no heuristics, no LLM. When the scope of a change is unclear, Verifika runs everything or fails loudly. It never quietly skips a check, and in CI it runs the full suite unless you explicitly ask for a selective run.
 - **Trustworthy results.** Timeouts, fail-fast, correct exit codes and signal handling. A check only passes once its whole process tree has exited. Tested on Linux, macOS and Windows.
 - **Built for humans and coding agents alike.** Live progress on a terminal, one line in agent sessions, JSON for scripts. It ships an [agent skill](skills/verifika/SKILL.md) for Claude Code, Codex, OpenCode and others.
@@ -160,7 +160,7 @@ The default is `human` on an interactive terminal and `agent` otherwise. Overrid
 | `json`  | Versioned result document     | Same document, `"status": "failed"`                             |
 | `quiet` | Nothing                       | One line on stderr                                              |
 
-In `human` mode on an interactive terminal, a live status block shows progress, each running check with its latest output line, and what the queued checks wait on; finished checks print above it. In CI, when piped, with `TERM=dumb`, or with `--no-live` / `VERIFIKA_LIVE=0`, `human` mode prints plain lines instead (one per check start and end, plus a note every 30 seconds for long checks), which read well in logs. `NO_COLOR` turns colour off in both.
+In `human` mode on an interactive terminal, a live status block shows progress, each running check with its latest output line, and what the queued checks wait on. Finished checks print above it. In CI, when piped, with `TERM=dumb`, or with `--no-live` / `VERIFIKA_LIVE=0`, `human` mode prints plain lines instead. These are one per check start and end, plus a note every 30 seconds for long checks, and they read well in logs. `NO_COLOR` turns colour off in both.
 
 Exit codes: `0` passed (or nothing to verify), `1` verification failed, `2` usage or configuration error, `128+n` interrupted by a signal (`130` SIGINT, `143` SIGTERM).
 
@@ -183,6 +183,7 @@ Verifika ships an [agent skill](skills/verifika/SKILL.md) that teaches coding ag
 
 ## Documentation
 
+- [Documentation site](https://alexportelli12.github.io/verifika/docs/): searchable guides and generated reference
 - [Website](https://alexportelli12.github.io/verifika/)
 - [Configuration reference](docs/configuration.md)
 - [CLI reference](docs/cli.md)

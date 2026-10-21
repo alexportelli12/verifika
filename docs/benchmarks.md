@@ -1,8 +1,16 @@
+---
+sources:
+  - src/planner.ts
+  - src/scheduler.ts
+  - src/preview.ts
+reviewed: 2026-10-21
+---
+
 # Validation and benchmarks
 
 Before its first release, Verifika was run against two real projects and compared with the sequential `verify-runner` script those projects used before. The source repositories were not modified: all runs happened in disposable clones, with a `verifika.config.json` that translated each project's existing `npm run verify` checks one to one.
 
-Measured on 2026-10-12. Machine: 8 vCPU (QEMU), 15 GiB RAM, Linux 6.12, Node 24.19.0. Every timed run waited for a 1-minute load average below 1.5 (idle ≈ 0.5); the load at the start of each run was 1.29–1.48. Treat the numbers as indicative for this machine, not as guarantees.
+Measured on 2026-10-12. Machine: 8 vCPU (QEMU), 15 GiB RAM, Linux 6.12, Node 24.19.0. Every timed run waited for a 1-minute load average below 1.5 (idle ≈ 0.5). The load at the start of each run was 1.29–1.48. Treat the numbers as indicative for this machine, not as guarantees.
 
 ## Projects
 
@@ -74,7 +82,7 @@ Tokens are approximated as bytes ÷ 4.
 
 The previous runner stops at the first failure and prints that check's entire output. Verifika runs every selected check, reports each failure in one line with a short preview, and leaves the full logs on disk for `verifika logs`.
 
-The two single-assertion rows were measured after the preview improvements described below. The validation run surfaced a weakness, and it was fixed before release: in the first measurement the preview was crowded out by Karma progress lines and by JSON log lines that contain "error". Previews now rank failure markers (`FAILED`, `FAIL`, `AssertionError`, `Expected`, `error TS…`) above exception lines and generic mentions of "error", and collapse progress output.
+The two single-assertion rows were measured after the preview improvements described below. The validation run surfaced a weakness, and it was fixed before release. In the first measurement, Karma progress lines and JSON log lines that contain "error" crowded out the preview. Previews now rank failure markers (`FAILED`, `FAIL`, `AssertionError`, `Expected`, `error TS…`) above exception lines and generic mentions of "error", and collapse progress output.
 
 ## Reproducing
 

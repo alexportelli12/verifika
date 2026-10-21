@@ -4,3 +4,7 @@ node_modules/
 package-lock.json
 .verifika/
 CHANGELOG.md
+
+# Generated docs
+docs-site/
+site/docs/

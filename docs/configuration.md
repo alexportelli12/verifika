@@ -1,3 +1,14 @@
+---
+sources:
+  - schemas/verifika.schema.json
+  - src/config.ts
+  - src/planner.ts
+  - src/ci.ts
+  - src/git.ts
+  - src/glob.ts
+reviewed: 2026-10-21
+---
+
 # Configuration reference
 
 Verifika reads `verifika.config.json`, searching from the current directory upwards (or the file given with `--config`). The directory containing the file is the **project root**: commands run there, and every glob is relative to it.
@@ -160,14 +171,14 @@ In CI, shallow clones are common. `vfk` in CI runs everything without consulting
 
 ## CI detection
 
-A run counts as CI when `CI` is set to anything other than `false`/`0`/empty, or when any provider variable is set (`GITHUB_ACTIONS`, `GITLAB_CI`, `BUILDKITE`, `CIRCLECI`, `TRAVIS`, `JENKINS_URL`, `TF_BUILD`, `TEAMCITY_VERSION`, `BITBUCKET_BUILD_NUMBER`, `CODEBUILD_BUILD_ID`, `DRONE`, `APPVEYOR`, `SEMAPHORE`). Environment variables can only turn CI mode on: `CI=false` does not cancel a provider variable, because some build setups export it for unrelated reasons, and there is no variable that disables detection. In CI, plain `vfk` always runs every check. A selective CI run needs an explicit `--changed` or `--changed-since <ref>` on the command line, and its output says `selective in CI by request`.
+A run counts as CI when `CI` is set to anything other than `false`/`0`/empty, or when any provider variable is set (`GITHUB_ACTIONS`, `GITLAB_CI`, `BUILDKITE`, `CIRCLECI`, `TRAVIS`, `JENKINS_URL`, `TF_BUILD`, `TEAMCITY_VERSION`, `BITBUCKET_BUILD_NUMBER`, `CODEBUILD_BUILD_ID`, `DRONE`, `APPVEYOR`, `SEMAPHORE`). Environment variables can only turn CI mode on. `CI=false` does not cancel a provider variable, because some build setups export it for unrelated reasons. No variable disables detection. In CI, plain `vfk` always runs every check. A selective CI run needs an explicit `--changed` or `--changed-since <ref>` on the command line, and its output says `selective in CI by request`.
 
 ## Run storage
 
-Logs live in `.verifika/` under the project root. Verifika writes `.verifika/.gitignore` containing `*`, so the directory is ignored without touching your own `.gitignore`. Each run directory contains one `<check>.log` per executed check and `run.json`, the same document `--mode json` prints. The latest run, which `vfk logs` shows by default, is simply the newest run directory: run ids sort by start time.
+Logs live in `.verifika/` under the project root. Verifika writes `.verifika/.gitignore` containing `*`, so the directory is ignored without touching your own `.gitignore`. Each run directory contains one `<check>.log` per executed check and `run.json`, the same document `--mode json` prints. The latest run, which `vfk logs` shows by default, is the newest run directory. Run ids sort by start time.
 
 Several Verifika processes can share a project directory safely (for example two agents, or an agent and an editor integration):
 
 - Each run directory is created atomically with its `run.json` and an owner record naming the process, which is removed when the run finishes.
 - Retention (`keepRuns`) never deletes a run whose owner is still running. Runs left behind by a process that crashed are pruned like finished runs, and so are half-created directories older than an hour.
-- "Latest" is derived from the run directories rather than stored in a shared file, so concurrent runs cannot leave it pointing at an older run, and retention (which always keeps the newest runs) can never remove it. If another run started while yours was in progress, your run's result has `"latest": false` and its logs hint includes `--run <id>`, so it always leads to your own logs.
+- "Latest" is derived from the run directories rather than stored in a shared file. Concurrent runs cannot leave it pointing at an older run, and retention (which always keeps the newest runs) can never remove it. If another run started while yours was in progress, your run's result has `"latest": false` and its logs hint includes `--run <id>`, so it always leads to your own logs.

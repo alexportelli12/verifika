@@ -4,3 +4,7 @@ coverage/
 *.tgz
 .verifika/
 .DS_Store
+
+# Generated docs: pages are written here, then built into site/docs/
+/docs-site/
+/site/docs/

@@ -1,3 +1,10 @@
+---
+sources:
+  - skills/verifika/SKILL.md
+  - scripts/check-skill.mjs
+reviewed: 2026-10-21
+---
+
 # Agent integration
 
 Verifika has no agent-specific runtime behaviour. Any agent that can run a shell command can use it: when stdout is not a terminal, output defaults to the compact `agent` mode, and exit codes carry the result.
@@ -75,5 +82,5 @@ PASS 5/5 (14s) full run (--all)
 ## Wiring into existing workflows
 
 - **npm scripts.** `vfk init` adds `"verify": "vfk"` (selective) and `"verify:ci": "vfk --all"` (the full gate). Because `npm run verify` is selective, it is not the pre-delivery gate: agents and workflows that need the authoritative gate before delivery must run `npm run verify:ci` (or `npx vfk --all`). If your workflow is hard-wired to `npm run verify` as its gate, point that workflow at `npm run verify:ci` rather than turning `verify` back into a full run.
-- **CI.** Run `npm run verify:ci` (or `npx vfk --all`). Plain `npx vfk` also runs everything in CI, but the explicit gate does not depend on CI detection. Use `--mode json` if a later step needs structured results, and upload `.verifika/runs/` as an artifact if you want logs (they may contain secrets).
+- **CI.** Run `npm run verify:ci` (or `npx vfk --all`). Plain `npx vfk` also runs everything in CI, but the explicit gate does not depend on CI detection. Use `--mode json` if a later step needs structured results, and upload `.verifika/runs/` as an artefact if you want logs (they may contain secrets).
 - **Hooks.** For a pre-push hook, use `npx vfk --changed-since origin/main` for speed, but keep `--all` in CI.
