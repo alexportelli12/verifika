@@ -646,12 +646,16 @@ describe("verifika logs", () => {
       { defaults: { keepRuns: 1 } },
     );
     const first = runCli(root, ["--check", "broken", "--mode", "json"]);
-    await waitFor(() => existsSync(path.join(root, "started.txt")));
-    // Two complete runs while the first is still going, with keepRuns: 1.
-    for (let index = 0; index < 2; index++) {
-      expect((await runCli(root, ["--check", "quick"])).code).toBe(0);
+    try {
+      await waitFor(() => existsSync(path.join(root, "started.txt")));
+      // Two complete runs while the first is still going, with keepRuns: 1.
+      for (let index = 0; index < 2; index++) {
+        expect((await runCli(root, ["--check", "quick"])).code).toBe(0);
+      }
+    } finally {
+      // Release the first run even when an assertion above fails, so it never lingers.
+      writeFileSync(path.join(root, "release.txt"), "");
     }
-    writeFileSync(path.join(root, "release.txt"), "");
     const slowRun = await first;
     expect(slowRun.code).toBe(1);
     const json = JSON.parse(slowRun.stdout) as RunResult;
