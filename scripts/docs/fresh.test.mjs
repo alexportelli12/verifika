@@ -1,11 +1,12 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { cp, mkdir, mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test, { after } from "node:test";
 import { fileURLToPath } from "node:url";
 import { checkFreshness, FreshnessError } from "./fresh.mjs";
+import { parseFrontmatter } from "./lib/frontmatter.mjs";
 
 const temporary = [];
 after(() =>
@@ -30,7 +31,7 @@ const sidecar = (reviewed = "2026-01-01") =>
 // A repository with an origin whose default branch is main, and a feature
 // branch checked out in a clone of it.
 async function fixture() {
-  const parent = await mkdtemp(path.join(os.tmpdir(), "verifika-fresh-"));
+  const parent = await realpath(await mkdtemp(path.join(os.tmpdir(), "verifika-fresh-")));
   temporary.push(parent);
   const origin = path.join(parent, "origin.git");
   const seed = path.join(parent, "seed");
@@ -137,7 +138,7 @@ test("with no origin ref it fails loudly instead of skipping, and VERIFIKA_DOCS_
 // CLI guide does not, and the check says so.
 test("changing a source of docs/cli.md without touching docs/cli.md fails the real check", async () => {
   const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
-  const directory = await mkdtemp(path.join(os.tmpdir(), "verifika-fresh-real-"));
+  const directory = await realpath(await mkdtemp(path.join(os.tmpdir(), "verifika-fresh-real-")));
   temporary.push(directory);
   const files = execFileSync("git", ["ls-files", "-co", "--exclude-standard", "-z"], {
     cwd: root,
@@ -180,4 +181,12 @@ test("changing a source of docs/cli.md without touching docs/cli.md fails the re
   );
   const remaining = await checkFreshness({ root: directory, env: {} });
   assert.ok(!remaining.some((problem) => problem.startsWith("docs/cli.md")), remaining.join("\n"));
+});
+
+test("frontmatter with CRLF line endings declares its sources", () => {
+  const { data } = parseFrontmatter(
+    "---\r\nsources:\r\n  - src/a.txt\r\nreviewed: 2026-10-21\r\n---\r\n# Page\r\n",
+  );
+  assert.deepEqual(data.sources, ["src/a.txt"]);
+  assert.equal(data.reviewed, "2026-10-21");
 });

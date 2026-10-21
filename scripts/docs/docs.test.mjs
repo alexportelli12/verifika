@@ -1,6 +1,16 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { cp, mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile } from "node:fs/promises";
+import {
+  cp,
+  mkdir,
+  mkdtemp,
+  readFile,
+  readdir,
+  realpath,
+  rm,
+  symlink,
+  writeFile,
+} from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test, { after } from "node:test";
@@ -26,7 +36,7 @@ after(() =>
 // resolves. `edit` changes files before the commit; `extra` adds files;
 // `untracked` writes files after the commit, which must never be read.
 async function copyRepo({ extra = {}, untracked = {}, edit = {} } = {}) {
-  const directory = await mkdtemp(path.join(os.tmpdir(), "verifika-docs-"));
+  const directory = await realpath(await mkdtemp(path.join(os.tmpdir(), "verifika-docs-")));
   temporary.push(directory);
   const files = git(root, "ls-files", "-co", "--exclude-standard", "-z")
     .split("\0")
