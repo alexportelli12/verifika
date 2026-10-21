@@ -48,7 +48,8 @@
         "schemas/**",
         "skills/verifika/**",
         "site/**",
-        "src/**",
+        "src/main.ts",
+        "src/errors.ts",
         "scripts/docs/**",
         "package.json"
       ]
