@@ -49,7 +49,7 @@ The documentation site at <https://alexportelli12.github.io/verifika/docs/> has 
 | Changelog             | `CHANGELOG.md`                                                           | Add an entry.                                    |
 | Guides                | `docs/*.md`, written by hand                                             | Update the page when a source it lists changes.  |
 
-`npm ci` runs no install scripts. The first `npm run prose` downloads the pinned Vale release from GitHub's release download URL, checks its SHA-256 against the hashes in `scripts/docs/vale.mjs`, and caches the binary in `node_modules/.cache/vale/`. Later runs reuse it. To bump Vale, change the version and hashes in that script.
+CI installs with `npm ci --ignore-scripts` because no dependency needs its install script. A plain local `npm ci` still runs esbuild's, which only checks its binary. The first `npm run prose` downloads the pinned Vale release from GitHub's release download URL, checks its SHA-256 against the hashes in `scripts/docs/vale.mjs`, and caches the binary in `node_modules/.cache/vale/`. Later runs reuse it. To bump Vale, change the version and hashes in that script.
 
 Each guide lists what it describes in `sources:` frontmatter and the date it was last checked in `reviewed:`. The `docs-fresh` check fails when a branch changes a listed source without touching the page. Update the page, or bump `reviewed` when nothing needs to change. `README.md` and `site/index.html` cannot carry frontmatter, so `docs/freshness.json` holds their declarations. The check compares with the merge base of `HEAD` and origin's default branch; it fails rather than skips when it cannot find one, so run `git fetch origin` or set `VERIFIKA_DOCS_BASE`.
 
