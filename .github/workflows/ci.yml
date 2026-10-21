@@ -34,6 +34,11 @@ jobs:
           node-version: ${{ matrix.node }}
           cache: npm
       - run: npm ci
+      # After npm ci, which clears node_modules. The key changes with the pinned Vale version.
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: node_modules/.cache/vale
+          key: vale-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('scripts/docs/vale.mjs') }}
       # Verifika verifies itself: format, lint, typecheck, build, tests, skill, packaged install.
       - run: npm run verify:ci -- --mode human
       - name: Show failed check logs

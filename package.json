@@ -54,8 +54,8 @@
     "docs:build": "node scripts/docs/build.mjs",
     "check:docs": "node scripts/docs/check.mjs",
     "check:docs-fresh": "node scripts/docs/fresh.mjs",
-    "test:docs": "node --test scripts/docs/docs.test.mjs scripts/docs/fresh.test.mjs",
-    "prose": "vale --config .vale.ini README.md docs site/index.html",
+    "test:docs": "node --test scripts/docs/docs.test.mjs scripts/docs/fresh.test.mjs scripts/docs/vale.test.mjs",
+    "prose": "node scripts/docs/vale.mjs --config .vale.ini README.md docs site/index.html",
     "verify": "node src/cli.ts",
     "verify:ci": "node src/cli.ts --all",
     "prepack": "npm run build"
@@ -67,7 +67,6 @@
     "@eslint/js": "^10.0.1",
     "@types/node": "^22.20.5",
     "@types/picomatch": "^4.0.3",
-    "@vvago/vale": "3.24.0",
     "ajv": "^8.20.0",
     "dictionary-en-gb": "3.0.0",
     "eslint": "^10.12.0",
@@ -79,7 +78,6 @@
     "vitest": "^5.0.4"
   },
   "allowScripts": {
-    "@vvago/vale@3.24.0": true,
     "esbuild@0.21.5": false,
     "fsevents@2.3.3": false
   }

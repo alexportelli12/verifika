@@ -83,7 +83,14 @@
     },
     "prose": {
       "command": "npm run --silent prose",
-      "paths": ["README.md", "docs/**", "site/index.html", ".vale.ini", ".vale/**"]
+      "paths": [
+        "README.md",
+        "docs/**",
+        "site/index.html",
+        ".vale.ini",
+        ".vale/**",
+        "scripts/docs/vale.mjs"
+      ]
     }
   }
 }
