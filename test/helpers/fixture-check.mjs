@@ -80,7 +80,8 @@ switch (action) {
     break;
   }
   case "wait-for":
-    // wait-for <file>: exits once <file> exists.
+    // wait-for <file> [ready]: writes <ready> if given, then exits once <file> exists.
+    if (args[1]) writeFileSync(args[1], "ready");
     while (!existsSync(args[0])) await sleep(20);
     break;
   case "big": {

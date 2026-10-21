@@ -637,18 +637,21 @@ describe("verifika logs", () => {
   it("keeps concurrent runs apart: hints point at their own run and logs survive", async () => {
     const root = project(
       {
-        slow: { command: "node check.mjs timeline timeline.txt slow 1500" },
+        // Holds the first run open until the test releases it, so it is still active
+        // however long the other runs take on a loaded machine.
+        slow: { command: "node check.mjs wait-for release.txt started.txt" },
         broken: { command: "node check.mjs fail 1 slow-run-failure", dependsOn: ["slow"] },
         quick: pass("quick"),
       },
       { defaults: { keepRuns: 1 } },
     );
     const first = runCli(root, ["--check", "broken", "--mode", "json"]);
-    await waitFor(() => existsSync(path.join(root, "timeline.txt")));
+    await waitFor(() => existsSync(path.join(root, "started.txt")));
     // Two complete runs while the first is still going, with keepRuns: 1.
     for (let index = 0; index < 2; index++) {
       expect((await runCli(root, ["--check", "quick"])).code).toBe(0);
     }
+    writeFileSync(path.join(root, "release.txt"), "");
     const slowRun = await first;
     expect(slowRun.code).toBe(1);
     const json = JSON.parse(slowRun.stdout) as RunResult;
