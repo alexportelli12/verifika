@@ -56,8 +56,8 @@
     "check:docs-fresh": "node scripts/docs/fresh.mjs",
     "test:docs": "node --test scripts/docs/docs.test.mjs scripts/docs/fresh.test.mjs scripts/docs/vale.test.mjs",
     "prose": "node scripts/docs/vale.mjs --config .vale.ini README.md docs site/index.html",
-    "verify": "node src/cli.ts",
-    "verify:ci": "node src/cli.ts --all",
+    "verify": "node src/cli.ts --all",
+    "vfk": "node src/cli.ts",
     "prepack": "npm run build"
   },
   "dependencies": {

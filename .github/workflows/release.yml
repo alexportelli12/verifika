@@ -54,7 +54,7 @@ jobs:
           fi
 
       # Builds dist/, runs every check and smoke-tests an installed tarball.
-      - run: npm run verify:ci -- --mode human
+      - run: npm run verify -- --mode human
 
       - name: Pack
         run: npm pack --ignore-scripts

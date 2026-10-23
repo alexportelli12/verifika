@@ -41,7 +41,7 @@ jobs:
           path: node_modules/.cache/vale
           key: vale-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('scripts/docs/vale.mjs') }}
       # Verifika verifies itself: format, lint, typecheck, build, tests, skill, packaged install.
-      - run: npm run verify:ci -- --mode human
+      - run: npm run verify -- --mode human
       - name: Show failed check logs
         if: failure()
         run: node src/cli.ts logs --failed --tail 200
