@@ -71,7 +71,7 @@
     "minisearch": "7.2.0",
     "oxfmt": "0.78.0",
     "oxlint": "1.93.0",
-    "typescript": "^6.0.3",
+    "typescript": "^7.0.2",
     "vitepress": "1.6.4",
     "vitest": "^5.0.4"
   }
