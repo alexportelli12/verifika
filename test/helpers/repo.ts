@@ -3,11 +3,11 @@ import { copyFileSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSy
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { afterEach } from "vitest";
+import { afterEach, inject } from "vitest";
 import { CI_VARIABLES } from "../../src/ci.ts";
 
-/** The compiled CLI that test/global-setup.ts builds before every run. */
-export const CLI = fileURLToPath(new URL("../../.test-dist/cli.js", import.meta.url));
+/** The compiled CLI that test/global-setup.ts builds for this test run. */
+export const CLI = inject("cli");
 /** The development entry point, run from TypeScript source. */
 export const SRC_CLI = fileURLToPath(new URL("../../src/cli.ts", import.meta.url));
 const FIXTURE = fileURLToPath(new URL("./fixture-check.mjs", import.meta.url));

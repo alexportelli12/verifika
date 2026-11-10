@@ -26,8 +26,7 @@
     },
     "test": {
       "command": "npm test",
-      "paths": ["src/**", "test/**", "schemas/**", "examples/**", "vitest.config.ts"],
-      "dependsOn": ["build"]
+      "paths": ["src/**", "test/**", "schemas/**", "examples/**", "vitest.config.ts"]
     },
     "skill": {
       "command": "npm run check:skill",
