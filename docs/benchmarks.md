@@ -3,7 +3,7 @@ sources:
   - src/planner.ts
   - src/scheduler.ts
   - src/preview.ts
-reviewed: 2026-10-21
+reviewed: 2026-11-10
 ---
 
 # Validation and benchmarks

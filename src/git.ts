@@ -3,7 +3,8 @@ import path from "node:path";
 import type { ChangeSet, ChangeStatus, ChangedFile } from "./types.ts";
 
 export type ChangeDetection =
-  { ok: true; changes: ChangeSet } | { ok: false; reason: string; hint?: string };
+  | { ok: true; changes: ChangeSet }
+  | { ok: false; reason: string; hint?: string };
 
 interface GitResult {
   code: number;

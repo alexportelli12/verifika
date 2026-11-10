@@ -9,7 +9,7 @@ sources:
   - src/runs.ts
   - src/logs.ts
   - src/reporters/**
-reviewed: 2026-10-21
+reviewed: 2026-11-10
 ---
 
 # Architecture
