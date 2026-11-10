@@ -14,7 +14,7 @@
     },
     "lint": {
       "command": "npm run lint",
-      "paths": ["**/*.{ts,js,mjs}", "eslint.config.js"]
+      "paths": ["**/*.{ts,js,mjs}", ".oxlintrc.json"]
     },
     "typecheck": {
       "command": "npm run typecheck",
