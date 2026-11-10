@@ -4,7 +4,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import type { RunResult } from "../../src/types.ts";
 import { project } from "../helpers/project.ts";
-import { isAlive, runCli } from "../helpers/repo.ts";
+import { isAlive, runCli, waitFor } from "../helpers/repo.ts";
 
 const isWindows = process.platform === "win32";
 
@@ -23,7 +23,12 @@ describe("verifika run", () => {
     const result = await runCli(root, ["--all"], { env: { VERIFIKA_TIMING_SCALE: "1" } });
     const pid = Number(readFileSync(path.join(root, "stubborn.txt"), "utf8"));
     const survived = isAlive(pid);
-    if (survived) process.kill(pid, "SIGKILL");
+    if (survived) {
+      process.kill(pid, "SIGKILL");
+      // Windows finishes the kill asynchronously; until then the process keeps the test's
+      // directory open and its removal fails with EBUSY.
+      await waitFor(() => !isAlive(pid));
+    }
     expect(result.code).toBe(0);
     expect(survived).toBe(false);
   });
@@ -39,7 +44,12 @@ describe("verifika run", () => {
     const file = path.join(root, "daemon.txt");
     const pid = existsSync(file) ? Number(readFileSync(file, "utf8")) : null;
     const survived = pid !== null && isAlive(pid);
-    if (survived) process.kill(pid, "SIGKILL");
+    if (survived) {
+      process.kill(pid, "SIGKILL");
+      // Windows finishes the kill asynchronously; until then the process keeps the test's
+      // directory open and its removal fails with EBUSY.
+      await waitFor(() => !isAlive(pid));
+    }
     expect(result.code).toBe(0);
     expect(survived).toBe(false);
   });
@@ -49,7 +59,12 @@ describe("verifika run", () => {
     const result = await runCli(root, ["--all", "--mode", "json"]);
     const pid = Number(readFileSync(path.join(root, "escape.txt"), "utf8"));
     const survived = isAlive(pid);
-    if (survived) process.kill(pid, "SIGKILL");
+    if (survived) {
+      process.kill(pid, "SIGKILL");
+      // Windows finishes the kill asynchronously; until then the process keeps the test's
+      // directory open and its removal fails with EBUSY.
+      await waitFor(() => !isAlive(pid));
+    }
     const json = JSON.parse(result.stdout) as RunResult;
     // The invariant on every platform: a check never passes while its leftover survives.
     if (result.code === 0) {
