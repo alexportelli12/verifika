@@ -20,7 +20,8 @@ export interface ScheduleOptions {
 
 /** Why running tasks were aborted. */
 export type StopReason =
-  { kind: "fail-fast"; failed: string } | { kind: "interrupted"; reason: unknown };
+  | { kind: "fail-fast"; failed: string }
+  | { kind: "interrupted"; reason: unknown };
 
 /**
  * Runs tasks with at most `concurrency` in flight, never starting a task before

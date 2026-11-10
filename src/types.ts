@@ -65,7 +65,14 @@ export interface CheckDecision {
 }
 
 export type CheckStatus =
-  "passed" | "failed" | "timed_out" | "error" | "blocked" | "cancelled" | "interrupted" | "skipped";
+  | "passed"
+  | "failed"
+  | "timed_out"
+  | "error"
+  | "blocked"
+  | "cancelled"
+  | "interrupted"
+  | "skipped";
 
 export interface CheckResult {
   name: string;

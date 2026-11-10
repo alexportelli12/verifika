@@ -36,12 +36,26 @@ export type ExecOutcome = (
 };
 
 const isWindows = process.platform === "win32";
+
+/**
+ * Factor for the cleanup timers below, from the internal and undocumented
+ * VERIFIKA_TIMING_SCALE. Verifika's own test suite sets it so cleanup tests do not
+ * wait seconds of real time. Anything other than a number from 0.05 to 1 means 1, so
+ * a typo can never shorten the timers further.
+ */
+export function timingScale(env: NodeJS.ProcessEnv): number {
+  const raw = env.VERIFIKA_TIMING_SCALE;
+  const value = raw === undefined || raw.trim() === "" ? Number.NaN : Number(raw);
+  return value >= 0.05 && value <= 1 ? value : 1;
+}
+
+const scale = timingScale(process.env);
 /** Time a terminated process tree gets to exit before it is killed outright. */
-const TERMINATE_GRACE_MS = 2_000;
+const TERMINATE_GRACE_MS = 2_000 * scale;
 /** Time a killed process gets to disappear before Verifika stops waiting for it. */
-const KILL_WAIT_MS = 5_000;
+const KILL_WAIT_MS = 5_000 * scale;
 /** Time to wait for output pipes to close once the check's processes are gone. */
-const PIPE_DRAIN_MS = 2_000;
+const PIPE_DRAIN_MS = 2_000 * scale;
 
 const active = new Set<ChildProcess>();
 

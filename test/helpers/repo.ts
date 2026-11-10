@@ -3,10 +3,13 @@ import { copyFileSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSy
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { afterEach } from "vitest";
+import { afterEach, inject } from "vitest";
 import { CI_VARIABLES } from "../../src/ci.ts";
 
-export const CLI = fileURLToPath(new URL("../../src/cli.ts", import.meta.url));
+/** The compiled CLI that test/global-setup.ts builds for this test run. */
+export const CLI = inject("cli");
+/** The development entry point, run from TypeScript source. */
+export const SRC_CLI = fileURLToPath(new URL("../../src/cli.ts", import.meta.url));
 const FIXTURE = fileURLToPath(new URL("./fixture-check.mjs", import.meta.url));
 
 const created: string[] = [];
@@ -96,16 +99,23 @@ export function cleanEnv(extra: NodeJS.ProcessEnv = {}): NodeJS.ProcessEnv {
   const inherited = Object.entries(process.env).filter(
     ([key]) => !ciSignals.has(key) && !key.startsWith("VERIFIKA"),
   );
-  return { ...Object.fromEntries(inherited), NO_COLOR: "1", ...extra };
+  // The cleanup-timer scale vitest.config.ts sets for the whole suite.
+  const timing = process.env.VERIFIKA_TIMING_SCALE;
+  return {
+    ...Object.fromEntries(inherited),
+    ...(timing === undefined ? {} : { VERIFIKA_TIMING_SCALE: timing }),
+    NO_COLOR: "1",
+    ...extra,
+  };
 }
 
 export function runCli(
   cwd: string,
   args: string[],
-  options: { env?: NodeJS.ProcessEnv; onSpawn?: (pid: number) => void } = {},
+  options: { env?: NodeJS.ProcessEnv; onSpawn?: (pid: number) => void; entry?: string } = {},
 ): Promise<CliResult> {
   return new Promise((resolve, reject) => {
-    const child = spawn(process.execPath, [CLI, ...args], {
+    const child = spawn(process.execPath, [options.entry ?? CLI, ...args], {
       cwd,
       env: cleanEnv(options.env),
       stdio: ["ignore", "pipe", "pipe"],

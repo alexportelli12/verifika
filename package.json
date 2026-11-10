@@ -45,9 +45,9 @@
   "scripts": {
     "build": "node scripts/clean-dist.mjs && tsc -p tsconfig.build.json && node -e \"fs.chmodSync('dist/cli.js', 0o755)\"",
     "typecheck": "tsc -p tsconfig.json",
-    "lint": "eslint .",
-    "format": "prettier --write .",
-    "format:check": "prettier --check .",
+    "lint": "oxlint",
+    "format": "oxfmt",
+    "format:check": "oxfmt --check",
     "test": "vitest run",
     "test:pack": "node scripts/pack-smoke.mjs",
     "check:skill": "node scripts/check-skill.mjs",
@@ -64,16 +64,14 @@
     "picomatch": "^4.0.7"
   },
   "devDependencies": {
-    "@eslint/js": "^10.0.1",
     "@types/node": "^22.20.5",
     "@types/picomatch": "^4.0.3",
     "ajv": "^8.20.0",
     "dictionary-en-gb": "3.0.0",
-    "eslint": "^10.12.0",
     "minisearch": "7.2.0",
-    "prettier": "^3.9.10",
-    "typescript": "^6.0.3",
-    "typescript-eslint": "^8.71.2",
+    "oxfmt": "0.78.0",
+    "oxlint": "1.93.0",
+    "typescript": "^7.0.2",
     "vitepress": "1.6.4",
     "vitest": "^5.0.4"
   }

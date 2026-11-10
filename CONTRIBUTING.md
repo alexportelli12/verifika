@@ -21,8 +21,8 @@ This repository's own scripts differ from the split it recommends to users (`ver
 | --------------------- | ------------------------------------------------- |
 | `npm test`            | Unit and integration tests (Vitest)               |
 | `npm run typecheck`   | TypeScript, including tests                       |
-| `npm run lint`        | ESLint                                            |
-| `npm run format`      | Prettier (write)                                  |
+| `npm run lint`        | oxlint                                            |
+| `npm run format`      | oxfmt (write)                                     |
 | `npm run build`       | Compile to `dist/`                                |
 | `npm run check:skill` | Validate the agent skill against the real CLI     |
 | `npm run test:pack`   | Pack, install in isolation, run the installed CLI |

@@ -3,7 +3,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { describeTime, hyperlink, readTail } from "../../src/logs.ts";
 import { DEFAULT_PAGER, pagerAvailable, pagerCommand } from "../../src/pager.ts";
-import { descendantsOf, execCheck } from "../../src/process.ts";
+import { descendantsOf, execCheck, timingScale } from "../../src/process.ts";
 import {
   createRun,
   createRunId,
@@ -145,6 +145,26 @@ describe("execCheck", () => {
       signal: controller.signal,
     });
     expect(outcome).toMatchObject({ kind: "aborted", reason: "SIGINT" });
+  });
+});
+
+describe("timingScale", () => {
+  it("scales cleanup timers only by a VERIFIKA_TIMING_SCALE from 0.05 to 1", () => {
+    expect(timingScale({})).toBe(1);
+    for (const [value, expected] of [
+      ["0.25", 0.25],
+      ["0.05", 0.05],
+      ["1", 1],
+      // Out of range or not a number: full timing, never shorter.
+      ["0.01", 1],
+      ["0", 1],
+      ["-0.5", 1],
+      ["2", 1],
+      ["fast", 1],
+      ["", 1],
+    ] as const) {
+      expect(timingScale({ VERIFIKA_TIMING_SCALE: value }), value).toBe(expected);
+    }
   });
 });
 
