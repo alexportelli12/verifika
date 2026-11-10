@@ -99,7 +99,14 @@ export function cleanEnv(extra: NodeJS.ProcessEnv = {}): NodeJS.ProcessEnv {
   const inherited = Object.entries(process.env).filter(
     ([key]) => !ciSignals.has(key) && !key.startsWith("VERIFIKA"),
   );
-  return { ...Object.fromEntries(inherited), NO_COLOR: "1", ...extra };
+  // The cleanup-timer scale vitest.config.ts sets for the whole suite.
+  const timing = process.env.VERIFIKA_TIMING_SCALE;
+  return {
+    ...Object.fromEntries(inherited),
+    ...(timing === undefined ? {} : { VERIFIKA_TIMING_SCALE: timing }),
+    NO_COLOR: "1",
+    ...extra,
+  };
 }
 
 export function runCli(

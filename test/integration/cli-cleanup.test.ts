@@ -19,7 +19,8 @@ describe("verifika run", () => {
 
   it("kills leftovers that ignore SIGTERM and do not hold the output", async () => {
     const root = project({ stubborn: { command: "node check.mjs stubborn stubborn.txt" } });
-    const result = await runCli(root, ["--all"]);
+    // The real SIGTERM grace period before SIGKILL, unscaled.
+    const result = await runCli(root, ["--all"], { env: { VERIFIKA_TIMING_SCALE: "1" } });
     const pid = Number(readFileSync(path.join(root, "stubborn.txt"), "utf8"));
     const survived = isAlive(pid);
     if (survived) process.kill(pid, "SIGKILL");
