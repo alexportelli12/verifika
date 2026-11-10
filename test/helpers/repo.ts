@@ -6,7 +6,10 @@ import { fileURLToPath } from "node:url";
 import { afterEach } from "vitest";
 import { CI_VARIABLES } from "../../src/ci.ts";
 
-export const CLI = fileURLToPath(new URL("../../src/cli.ts", import.meta.url));
+/** The compiled CLI that test/global-setup.ts builds before every run. */
+export const CLI = fileURLToPath(new URL("../../.test-dist/cli.js", import.meta.url));
+/** The development entry point, run from TypeScript source. */
+export const SRC_CLI = fileURLToPath(new URL("../../src/cli.ts", import.meta.url));
 const FIXTURE = fileURLToPath(new URL("./fixture-check.mjs", import.meta.url));
 
 const created: string[] = [];
@@ -102,10 +105,10 @@ export function cleanEnv(extra: NodeJS.ProcessEnv = {}): NodeJS.ProcessEnv {
 export function runCli(
   cwd: string,
   args: string[],
-  options: { env?: NodeJS.ProcessEnv; onSpawn?: (pid: number) => void } = {},
+  options: { env?: NodeJS.ProcessEnv; onSpawn?: (pid: number) => void; entry?: string } = {},
 ): Promise<CliResult> {
   return new Promise((resolve, reject) => {
-    const child = spawn(process.execPath, [CLI, ...args], {
+    const child = spawn(process.execPath, [options.entry ?? CLI, ...args], {
       cwd,
       env: cleanEnv(options.env),
       stdio: ["ignore", "pipe", "pipe"],

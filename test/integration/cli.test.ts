@@ -7,6 +7,7 @@ import { main } from "../../src/main.ts";
 import type { RunResult } from "../../src/types.ts";
 import {
   CLI,
+  SRC_CLI,
   cleanEnv,
   commitAll,
   config,
@@ -794,14 +795,17 @@ describe("verifika init, help and version", () => {
 
   it("prints help and version", async () => {
     const root = tempDir();
-    const help = await runCli(root, ["--help"]);
-    expect(help.code).toBe(0);
-    expect(help.stdout).toContain("vfk plan [options]");
-    const version = await runCli(root, ["--version"]);
     const manifest = JSON.parse(
       readFileSync(new URL("../../package.json", import.meta.url), "utf8"),
     );
-    expect(version.stdout).toBe(`${manifest.version}\n`);
+    // The compiled CLI the other tests use, and the TypeScript entry point used in development.
+    for (const entry of [CLI, SRC_CLI]) {
+      const help = await runCli(root, ["--help"], { entry });
+      expect(help.code, entry).toBe(0);
+      expect(help.stdout, entry).toContain("vfk plan [options]");
+      const version = await runCli(root, ["--version"], { entry });
+      expect(version.stdout, entry).toBe(`${manifest.version}\n`);
+    }
   });
 
   it("rejects stray positional arguments", async () => {
