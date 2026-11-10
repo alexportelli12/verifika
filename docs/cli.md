@@ -8,7 +8,7 @@ sources:
   - src/process.ts
   - src/preview.ts
   - src/reporters/**
-reviewed: 2026-10-21
+reviewed: 2026-11-10
 ---
 
 # CLI reference
